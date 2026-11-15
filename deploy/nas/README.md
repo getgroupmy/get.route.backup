@@ -2,11 +2,12 @@
 
 The Traffic Scraper answers your app with Google Maps' live drive time and
 distance. It runs on the NAS the same way GET.route does: a container with
-Chrome and a small API, reached only through a Cloudflare Tunnel.
+Chrome and a small API, reached through **GET.route's Cloudflare Tunnel**.
 
 ```
- your app ──https──► traffic.getride.my ─ Tunnel ─► traffic-scraper  (Chrome + API)
-           X-Route-Key                   (cloudflared)
+                     route.getride.my   ─┐                ┌─► get-route-pool   (GET.route)
+ your app ──https──►                     ├─ Tunnel ─► get-route-tunnel
+           X-Route-Key traffic.getride.my ─┘  (cloudflared)  └─► traffic-scraper  (Chrome + API)
 ```
 
 `traffic.getride.my` is an example hostname; use any name in your
@@ -69,9 +70,13 @@ that fails to load is a 500.
 
 ## How the container works
 
-- **Chrome stays open.** The first query opens Chrome (a few seconds); later
-  queries reuse it. After 10 idle minutes (`BROWSER_IDLE`) it closes and
-  stops using memory. `POST /warm` opens it ahead of time.
+- **Chrome stays open.** On the NAS, Chrome opens when the container starts
+  (`WARM_ON_START=1`) and stays open (`BROWSER_IDLE=0`): GET.ride gives the
+  live-traffic steps only 3 s per trip, less than Chrome needs to start, so
+  a cold Chrome would make the Google Maps step miss. Elsewhere the default
+  is to open it on the first query and close it after 10 idle minutes.
+  `POST /warm` opens it ahead of time. If Chrome crashes, the next query
+  opens a new one (that query may miss the 3 s).
 - **Failures heal themselves.** If Chrome crashes or a page fails to load,
   the window is closed and the next query opens a fresh one. Docker restarts
   the container if the API itself stops.
@@ -109,30 +114,81 @@ On your computer you can also watch Chrome work: start the API with
 - About 3 GB of disk for the image. If GET.route is already on the NAS, the
   two share the same Chrome base image, so this adds very little.
 - About 1 GB of memory while Chrome is open (`MEM_LIMIT`); little when idle.
-- A Cloudflare account with your domain's zone.
+- A Cloudflare account with your domain's zone (GET.route's tunnel is reused).
 
-## Set it up
+## Set it up (next to GET.route)
 
-1. Copy this repository to the NAS, e.g. `/volume1/docker/traffic-scraper`.
-2. In Cloudflare Zero Trust › Networks › Tunnels, create a tunnel (Docker)
-   and copy the token. Add **one** public hostname, e.g.
-   `traffic.getride.my` → `http://traffic-scraper:8000`.
-   (You can also add this hostname to GET.route's existing tunnel instead,
-   if both run on the same NAS; then leave out the `cloudflared` service
-   here and put both projects on one Docker network.)
-3. In `deploy/nas`, copy `.env.example` to `.env`; set `TUNNEL_TOKEN` and
-   `ROUTE_API_KEY` (`openssl rand -hex 32`).
-4. Start it: Container Manager › Project › Create, path `deploy/nas`, or
-   over SSH:
+This uses **GET.route's Cloudflare tunnel**: no second tunnel, no new
+token. The container joins GET.route's Docker network, so GET.route's
+`cloudflared` can reach it by name.
+
+1. Copy this repository to the NAS, e.g. over SSH:
+
+   ```bash
+   cd /volume1/docker && sudo git clone https://github.com/getgroupmy/get.route.backup.git traffic-scraper
+   ```
+
+2. Find GET.route's Docker network (the one its tunnel container is on):
+
+   ```bash
+   sudo docker inspect get-route-tunnel --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+   ```
+
+   It prints a name such as `nas_default` or `get-route_default`.
+
+3. In `deploy/nas`, copy `.env.example` to `.env`. Set:
+   - `GET_ROUTE_NETWORK` to the name from step 2;
+   - `ROUTE_API_KEY` to a new secret (`openssl rand -hex 32`), or to
+     GET.route's key if you want your app to use one key for both.
+
+   ```bash
+   cd /volume1/docker/traffic-scraper/deploy/nas && sudo cp .env.example .env && sudo vi .env
+   ```
+
+4. Start it:
 
    ```bash
    cd /volume1/docker/traffic-scraper/deploy/nas && sudo docker compose up -d --build
    ```
 
-5. Check it from anywhere: `https://traffic.getride.my/health` answers
-   `{"status": "ok", ...}`.
-6. In your app, send `GET /routes/search?from=…&to=…` to that hostname with
+   (Or Container Manager › Project › Create, path `deploy/nas`, project
+   name `traffic-scraper`.) The first build downloads only the parts GET.route
+   doesn't already have.
+
+5. In Cloudflare Zero Trust › Networks › Tunnels, open **GET.route's
+   tunnel** › Public Hostname › **Add a public hostname**:
+   `traffic.getride.my` → type **HTTP**, URL `traffic-scraper:8000`.
+   GET.route's own hostname stays as it is.
+
+6. Check it from anywhere: `https://traffic.getride.my/health` answers
+   `{"status": "ok", ...}`. Then a real query:
+
+   ```bash
+   curl -s -H "X-Route-Key: $ROUTE_API_KEY" "https://traffic.getride.my/routes/search?from=3.1579,101.7116&to=3.1340,101.6862"
+   ```
+
+7. In your app, send `GET /routes/search?from=…&to=…` to that hostname with
    the key in `X-Route-Key`.
+
+**Separate from GET.route.** The project is always called `traffic-scraper`
+(set in `docker-compose.yml`), so `docker compose` commands in this folder
+never touch GET.route's containers, even though both compose files live in
+a folder called `deploy/nas`. If GET.route's network is ever recreated
+(e.g. GET.route is taken down and up), run step 4 again to rejoin it.
+
+### Its own tunnel (without GET.route)
+
+Create the network yourself and start the tunnel container too:
+
+1. `sudo docker network create traffic-scraper-net` and set
+   `GET_ROUTE_NETWORK=traffic-scraper-net` in `.env`.
+2. Create a tunnel in Cloudflare (Docker), put its token in `TUNNEL_TOKEN`
+   in `.env`, and add the hostname → `http://traffic-scraper:8000`.
+3. Start with the tunnel:
+
+   ```bash
+   sudo docker compose --profile own-tunnel up -d --build
+   ```
 
 ## Try it on your computer first
 

@@ -82,6 +82,8 @@ class WarmChrome:
     def _reaper(self):
         while True:
             time.sleep(30)
+            if self.idle_seconds <= 0:
+                continue  # 0 = keep Chrome open
             if self._driver is not None and time.time() - self._last_use > self.idle_seconds:
                 if self._lock.acquire(blocking=False):
                     try:

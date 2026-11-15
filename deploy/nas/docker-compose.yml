@@ -4,8 +4,19 @@
 #
 #   traffic.getride.my -> http://traffic-scraper:8000   needs X-Route-Key
 #
-# Chrome opens on the first query, stays open between queries and closes
-# after 10 idle minutes.
+# Chrome opens when the container starts and stays open (WARM_ON_START,
+# BROWSER_IDLE below): GET.ride allows the Google Maps step only 3 s.
+#
+# By default it uses GET.route's tunnel: the container joins GET.route's
+# Docker network (GET_ROUTE_NETWORK in .env), so GET.route's cloudflared can
+# reach it by name. Without GET.route, start it with its own tunnel instead
+# (see README.md, "Its own tunnel").
+
+# A fixed project name. GET.route's compose file also lives in a folder
+# called deploy/nas; without this, both would be the project "nas" and
+# commands here could stop GET.route's containers.
+name: traffic-scraper
+
 services:
   traffic-scraper:
     build: ../..
@@ -19,21 +30,36 @@ services:
       PORT: "8000"
       ROUTE_API_KEY: ${ROUTE_API_KEY:?Set ROUTE_API_KEY in .env (openssl rand -hex 32)}
       CACHE_SECONDS: ${CACHE_SECONDS:-60}
-      BROWSER_IDLE: ${BROWSER_IDLE:-600}
+      # GET.ride gives live-traffic steps 3 s per trip, less than Chrome
+      # needs to start: open it at start-up and keep it open.
+      BROWSER_IDLE: ${BROWSER_IDLE:-0}
+      WARM_ON_START: ${WARM_ON_START:-1}
     expose:
       - "8000"
     volumes:
       # Pages Chrome saw when a query failed (see README.md).
       - ./debug:/app/debug
+    networks:
+      - default
+      - get-route
     mem_limit: ${MEM_LIMIT:-1g}
 
+  # Only with --profile own-tunnel (when GET.route's tunnel isn't used).
   cloudflared:
+    profiles: ["own-tunnel"]
     image: cloudflare/cloudflared:2026.9.3
     container_name: traffic-scraper-tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}  # set in .env when using --profile own-tunnel
     depends_on:
       - traffic-scraper
     mem_limit: 256m
+
+networks:
+  # GET.route's network, where its cloudflared runs. Find its name with:
+  #   sudo docker inspect get-route-tunnel --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+  get-route:
+    external: true
+    name: ${GET_ROUTE_NETWORK:?Set GET_ROUTE_NETWORK in .env (GET.route's Docker network)}
