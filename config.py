@@ -9,12 +9,18 @@ environment variable; the defaults work out of the box.
                    (default 60; 0 turns the cache off)
     BROWSER_IDLE   close Chrome after this many seconds without a query
                    (default 600)
+    HEADLESS       0 shows the Chrome window (to watch it on your computer;
+                   default 1 = hidden)
+    DEBUG_DIR      when a page fails to load, save a screenshot, its HTML and
+                   a summary here (default: debug; empty = don't save)
 """
 import os
 
 PORT = int(os.environ.get("PORT", "8000"))
 CACHE_SECONDS = float(os.environ.get("CACHE_SECONDS", "60"))
 BROWSER_IDLE = int(os.environ.get("BROWSER_IDLE", "600"))
+HEADLESS = os.environ.get("HEADLESS", "1") != "0"
+os.environ.setdefault("DEBUG_DIR", "debug")  # read by TrafficScraper.save_debug
 
 # How long a query waits for its turn on the one Chrome window.
 WAIT_FOR_CHROME = 90

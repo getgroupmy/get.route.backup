@@ -41,6 +41,7 @@ recommends), so `count` is 1 and the fields Waze fills but Google doesn't
     "distance_meters": 5400,
     "is_fastest": true,
     "is_toll": false,
+    "traffic_status": "Fastest route, the usual traffic",
     "link": "https://www.google.com/maps/dir/3.1579,101.7116/3.134,101.6862/data=!4m2!4m1!3e0?hl=en"
   }],
   "source": "google_maps",
@@ -81,6 +82,17 @@ that fails to load is a 500.
   ```bash
   curl -s -H "X-Route-Key: $ROUTE_API_KEY" https://traffic.getride.my/health
   ```
+
+## When a query fails
+
+If Google's page doesn't show a route within 20 s, the error says so and
+the container saves what Chrome saw (a screenshot, the page HTML and a
+`summary.txt` of its text and buttons) in `deploy/nas/debug/<time>/`.
+Open the screenshot first: it usually shows why (a consent page, a blank
+page, an unexpected layout).
+
+On your computer you can also watch Chrome work: start the API with
+`HEADLESS=0 python run.py` and a Chrome window opens for each query.
 
 ## Security
 
