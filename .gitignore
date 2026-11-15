@@ -26,4 +26,6 @@ Thumbs.db
 .env
 
 # Saved pages from failed scrapes (DEBUG_DIR)
-debug/
+**/debug/*
+# ...but keep the NAS mount folder, which Synology's Docker won't create itself
+!deploy/nas/debug/.gitkeep
