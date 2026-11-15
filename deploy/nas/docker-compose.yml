@@ -22,6 +22,9 @@ services:
       BROWSER_IDLE: ${BROWSER_IDLE:-600}
     expose:
       - "8000"
+    volumes:
+      # Pages Chrome saw when a query failed (see README.md).
+      - ./debug:/app/debug
     mem_limit: ${MEM_LIMIT:-1g}
 
   cloudflared:

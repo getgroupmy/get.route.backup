@@ -24,3 +24,6 @@ Thumbs.db
 
 # Local secrets
 .env
+
+# Saved pages from failed scrapes (DEBUG_DIR)
+debug/

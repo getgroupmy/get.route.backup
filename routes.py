@@ -128,7 +128,7 @@ def _search(trip):
             "is_hov": False,
             "passes_through_danger_area": False,
             "route_type": None,
-            "traffic_status": None,
+            "traffic_status": found["traffic"],
             "toll": None,
             "restricted_areas": [],
             "required_permits": [],

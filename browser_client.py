@@ -15,7 +15,7 @@ from TrafficScraper import chrome_options, load_directions, new_driver
 class WarmChrome:
     def __init__(self, idle_seconds, driver_factory=None):
         self.idle_seconds = idle_seconds
-        self._factory = driver_factory or (lambda: new_driver(chrome_options(headless=True)))
+        self._factory = driver_factory or (lambda: new_driver(chrome_options(headless=config.HEADLESS)))
         self._lock = threading.Lock()
         self._driver = None
         self._opened_at = None
