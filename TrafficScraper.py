@@ -32,8 +32,14 @@ class TrafficScraper:
             driver = webdriver.Chrome(options=self.chrome_options)
             try:
                 driver.get(url)
-                time.sleep(3)  # Wait for the page to load
-                page_source = driver.page_source
+                # Wait (up to ~20s) for the directions panel instead of a fixed 3s
+                for _ in range(20):
+                    time.sleep(1)
+                    page_source = driver.page_source
+                    if "Directions from" in page_source:
+                        time.sleep(1)
+                        page_source = driver.page_source
+                        break
             except Exception as e:
                 driver.quit()
                 raise ConnectionError(f"Failed to load page {url}: {str(e)}")
@@ -49,28 +55,25 @@ class TrafficScraper:
             if section is None:
                 raise ValueError(f"Could not find traffic section for {self.places[idx]}")
             
-            for span in section.find_all('span'):
-                trial_text = span.get_text()
-                match = re.search(r'(([0-9]+) hr \(([0-9.]+) km\))|(([0-9]+) min \(([0-9.]+) km\))|(([0-9]+) hr ([0-9]+) min \(([0-9.]+) km\))', trial_text)
-                if match:
-                    if match.group(2) and match.group(3):
-                        # X hr (Y km)
-                        traffic_data[self.places[idx]] = {
-                            "time": int(match.group(2)) * 60,
-                            "distance": float(match.group(3))
-                        }
-                    elif match.group(5) and match.group(6):
-                        # X min (Y km)
-                        traffic_data[self.places[idx]] = {
-                            "time": int(match.group(5)),
-                            "distance": float(match.group(6))
-                        }
-                    elif match.group(8) and match.group(9) and match.group(10):
-                        # X hr Y min (Z km)
-                        traffic_data[self.places[idx]] = {
-                            "time": int(match.group(8)) * 60 + int(match.group(9)),
-                            "distance": float(match.group(10))
-                        }
+            # Join span texts with a separator so adjacent text (e.g. road code
+            # "E12" + "35 min") can't fuse into "E1235 min". The route total is
+            # the FIRST "time (distance)" in the panel (the header); later
+            # matches are per-step times and must not overwrite the total.
+            panel_text = section.get_text(" ", strip=True)
+            pattern = re.compile(
+                r'(?<![\w/])(?:(\d+)\s*hr)?\s*(?:(\d+)\s*min)?\s*\(\s*([\d.,]+)\s*(km|m)\s*\)'
+            )
+            match = next((m for m in pattern.finditer(panel_text)
+                          if m.group(1) or m.group(2)), None)
+            if match is None:
+                raise ValueError(f"Could not find route time/distance for {self.places[idx]}")
+            dist = float(match.group(3).replace(",", ""))
+            if match.group(4) == "m":
+                dist /= 1000
+            traffic_data[self.places[idx]] = {
+                "time": int(match.group(1) or 0) * 60 + int(match.group(2) or 0),
+                "distance": round(dist, 3),
+            }
         self.data = traffic_data
         return traffic_data
 
