@@ -30,6 +30,7 @@ class TrafficScraper:
         traffic_data = {}
         for idx, url in enumerate(self.urls):
             driver = webdriver.Chrome(options=self.chrome_options)
+            panel_loaded = False
             try:
                 driver.get(url)
                 # Wait (up to ~20s) for the directions panel instead of a fixed 3s
@@ -39,12 +40,17 @@ class TrafficScraper:
                     if "Directions from" in page_source:
                         time.sleep(1)
                         page_source = driver.page_source
+                        panel_loaded = True
                         break
             except Exception as e:
-                driver.quit()
                 raise ConnectionError(f"Failed to load page {url}: {str(e)}")
-            driver.quit()
-            
+            finally:
+                driver.quit()
+            if not panel_loaded:
+                raise TimeoutError(
+                    f"Directions panel did not load within 20s for {self.places[idx]} ({url})"
+                )
+
             soup = BS(page_source, "html.parser")
             try:
                 directions_text = re.search(r'"(Directions from.*?)"', str(soup)).group(1)
@@ -95,17 +101,32 @@ class TrafficScraper:
         print(f"Data exported to {filename}")
 
     def start_scraping(self, duration_minutes=30, interval_minutes=5):
-        """Repeatedly scrapes data for a certain duration at fixed intervals."""
+        """Repeatedly scrapes data for a certain duration at fixed intervals.
+
+        A failed attempt is logged and skipped so one bad page load doesn't
+        lose the rows already collected.
+        """
         end_time = datetime.now() + timedelta(minutes=duration_minutes)
+        interval = timedelta(minutes=interval_minutes)
         all_dataframes = []
 
         while datetime.now() < end_time:
-            print(f"Scraping at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            self.scrape()
-            df = self.to_dataframe()
-            df['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            all_dataframes.append(df)
-            time.sleep(interval_minutes * 60)  # Sleep for 'interval_minutes' minutes
+            stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print(f"Scraping at {stamp}")
+            try:
+                self.scrape()
+                df = self.to_dataframe()
+                df['timestamp'] = stamp
+                all_dataframes.append(df)
+            except Exception as e:
+                print(f"Scrape at {stamp} failed, skipping: {e}")
 
+            # Don't sleep past the end of the run
+            if datetime.now() + interval >= end_time:
+                break
+            time.sleep(interval.total_seconds())
+
+        if not all_dataframes:
+            raise RuntimeError("Every scrape attempt failed; no data collected.")
         final_df = pd.concat(all_dataframes, ignore_index=True)
         return final_df
