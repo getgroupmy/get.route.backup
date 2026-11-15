@@ -56,7 +56,7 @@ pip install -r requirements.txt
 python web_scraping.py
 ```
 
-This prints the current traffic, saves `traffic_data_now.csv`, then runs a 10-minute timed collection and saves `traffic_data_over_time.csv`. Press `Ctrl+C` to stop early (the timed run then saves nothing).
+This prints the current traffic, saves `traffic_data_now.csv`, then runs a 10-minute timed collection and saves `traffic_data_over_time.csv`. Press `Ctrl+C` to stop the timed run early; the rows collected so far are still saved.
 
 ---
 
@@ -159,6 +159,7 @@ long_run_df.to_csv("traffic_data_over_time.csv", index=False)
 - **Returns:** A **pandas DataFrame** with collected data across all timestamps.
 - If one scrape fails (e.g. a page doesn't load), the error is printed and that attempt is skipped; the run keeps going. It only raises an error if **every** attempt fails.
 - It stops once the next scrape would fall after the end time, so e.g. a 10-minute run every 5 minutes scrapes twice and finishes after about 5 minutes.
+- Pressing `Ctrl+C` stops the run early and returns the rows collected so far (if nothing was collected yet, it stops as usual).
 - The interval is counted from the end of each scrape, so timestamps drift a few seconds later each round.
 
 ✅ **Example output:**  

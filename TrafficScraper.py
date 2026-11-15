@@ -104,27 +104,34 @@ class TrafficScraper:
         """Repeatedly scrapes data for a certain duration at fixed intervals.
 
         A failed attempt is logged and skipped so one bad page load doesn't
-        lose the rows already collected.
+        lose the rows already collected. Pressing Ctrl+C stops the run early
+        and returns the rows collected so far.
         """
         end_time = datetime.now() + timedelta(minutes=duration_minutes)
         interval = timedelta(minutes=interval_minutes)
         all_dataframes = []
 
-        while datetime.now() < end_time:
-            stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            print(f"Scraping at {stamp}")
-            try:
-                self.scrape()
-                df = self.to_dataframe()
-                df['timestamp'] = stamp
-                all_dataframes.append(df)
-            except Exception as e:
-                print(f"Scrape at {stamp} failed, skipping: {e}")
+        try:
+            while datetime.now() < end_time:
+                stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                print(f"Scraping at {stamp}")
+                try:
+                    self.scrape()
+                    df = self.to_dataframe()
+                    df['timestamp'] = stamp
+                    all_dataframes.append(df)
+                except Exception as e:
+                    print(f"Scrape at {stamp} failed, skipping: {e}")
 
-            # Don't sleep past the end of the run
-            if datetime.now() + interval >= end_time:
-                break
-            time.sleep(interval.total_seconds())
+                # Don't sleep past the end of the run
+                if datetime.now() + interval >= end_time:
+                    break
+                time.sleep(interval.total_seconds())
+        except KeyboardInterrupt:
+            # Ctrl+C: stop early but keep what was collected
+            if not all_dataframes:
+                raise
+            print(f"\nStopped early; returning {len(all_dataframes)} collected row(s).")
 
         if not all_dataframes:
             raise RuntimeError("Every scrape attempt failed; no data collected.")
