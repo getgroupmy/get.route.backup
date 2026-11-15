@@ -70,9 +70,13 @@ that fails to load is a 500.
 
 ## How the container works
 
-- **Chrome stays open.** The first query opens Chrome (a few seconds); later
-  queries reuse it. After 10 idle minutes (`BROWSER_IDLE`) it closes and
-  stops using memory. `POST /warm` opens it ahead of time.
+- **Chrome stays open.** On the NAS, Chrome opens when the container starts
+  (`WARM_ON_START=1`) and stays open (`BROWSER_IDLE=0`): GET.ride gives the
+  live-traffic steps only 3 s per trip, less than Chrome needs to start, so
+  a cold Chrome would make the Google Maps step miss. Elsewhere the default
+  is to open it on the first query and close it after 10 idle minutes.
+  `POST /warm` opens it ahead of time. If Chrome crashes, the next query
+  opens a new one (that query may miss the 3 s).
 - **Failures heal themselves.** If Chrome crashes or a page fails to load,
   the window is closed and the next query opens a fresh one. Docker restarts
   the container if the API itself stops.

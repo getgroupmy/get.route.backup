@@ -4,8 +4,8 @@
 #
 #   traffic.getride.my -> http://traffic-scraper:8000   needs X-Route-Key
 #
-# Chrome opens on the first query, stays open between queries and closes
-# after 10 idle minutes.
+# Chrome opens when the container starts and stays open (WARM_ON_START,
+# BROWSER_IDLE below): GET.ride allows the Google Maps step only 3 s.
 #
 # By default it uses GET.route's tunnel: the container joins GET.route's
 # Docker network (GET_ROUTE_NETWORK in .env), so GET.route's cloudflared can
@@ -30,7 +30,10 @@ services:
       PORT: "8000"
       ROUTE_API_KEY: ${ROUTE_API_KEY:?Set ROUTE_API_KEY in .env (openssl rand -hex 32)}
       CACHE_SECONDS: ${CACHE_SECONDS:-60}
-      BROWSER_IDLE: ${BROWSER_IDLE:-600}
+      # GET.ride gives live-traffic steps 3 s per trip, less than Chrome
+      # needs to start: open it at start-up and keep it open.
+      BROWSER_IDLE: ${BROWSER_IDLE:-0}
+      WARM_ON_START: ${WARM_ON_START:-1}
     expose:
       - "8000"
     volumes:

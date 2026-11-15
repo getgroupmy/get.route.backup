@@ -19,6 +19,10 @@ def main():
     app = bottle.default_app()
     print(f"Traffic API listening on http://localhost:{config.PORT}/")
     print(f"Try:  curl \"http://localhost:{config.PORT}/routes/search?from=-34.9285,138.6007&to=-34.9462,138.5312\"")
+    if config.WARM_ON_START:
+        from browser_client import chrome
+        chrome.warm()
+        print("Opening Chrome now (WARM_ON_START=1)")
     server = wsgi.Server(("0.0.0.0", config.PORT), app, server_name="traffic-scraper", numthreads=16)
     try:
         server.start()
