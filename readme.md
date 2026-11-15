@@ -14,21 +14,49 @@ This can be used to analyze traffic patterns, collect data, find peak congestion
 
 ## 🛠 Installation
 
-You can install all necessary packages using either **conda** or **pip**.
+### Requirements
+
+- **Python 3.11 or newer.** The pinned packages (pandas 3.x) don't install on older versions.
+- **Google Chrome.** Selenium downloads a matching ChromeDriver automatically the first time it runs.
+
+Check your Python version first:
+
+```bash
+python3 --version
+```
+
+> ⚠️ **On macOS, use `python3`, not `python`.** On many Macs `python` and `pip` still point to Python 2.7, which fails with `SyntaxError` or `No matching distribution found for selenium`.
+> If `python3 --version` shows 3.10 or lower, install a newer Python, e.g. with Homebrew: `brew install python@3.13` (then use `python3.13` in the step below), or from [python.org](https://www.python.org/downloads/).
+
+You can then install the packages using either a **virtual environment** (recommended) or **conda**.
+
+### Using a virtual environment
+
+From the project folder:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+While the environment is active, `python` and `pip` refer to the right Python 3. Activate it again (`source .venv/bin/activate`) in each new terminal before running the scraper.
 
 ### Using Conda
 
 ```bash
-conda create -n trafficscraper python=3.9
+conda create -n trafficscraper python=3.11
 conda activate trafficscraper
 pip install -r requirements.txt
 ```
 
-### Using Pip
+### Run the example
 
 ```bash
-pip install -r requirements.txt
+python web_scraping.py
 ```
+
+This prints the current traffic, saves `traffic_data_now.csv`, then runs a 10-minute timed collection and saves `traffic_data_over_time.csv`. Press `Ctrl+C` to stop the timed run early; the rows collected so far are still saved.
 
 ---
 
@@ -112,10 +140,13 @@ long_run_df.to_csv("traffic_data_over_time.csv", index=False)
 ✅ **Example output:**
 ```python
 {
-    'adelaide city to airport': {'time': 9, 'distance': 5.8},
-    'adelaide city to gawler': {'time': 5, 'distance': 3.6}
+    'adelaide city to airport': {'time': 10, 'distance': 5.8},
+    'adelaide city to gawler': {'time': 42, 'distance': 54.7}
 }
 ```
+
+- Waits up to 20 seconds per URL for the directions panel to load.
+- **Raises an error** if a route can't be read: `TimeoutError` if the panel never loads, `ValueError` if the time/distance can't be found on the page.
 
 ---
 
@@ -126,6 +157,10 @@ long_run_df.to_csv("traffic_data_over_time.csv", index=False)
   - `duration_minutes` (default = 30): Total time (in minutes) you want the scraper to keep collecting data.
   - `interval_minutes` (default = 5): How often (in minutes) you want to scrape new data.
 - **Returns:** A **pandas DataFrame** with collected data across all timestamps.
+- If one scrape fails (e.g. a page doesn't load), the error is printed and that attempt is skipped; the run keeps going. It only raises an error if **every** attempt fails.
+- It stops once the next scrape would fall after the end time, so e.g. a 10-minute run every 5 minutes scrapes twice and finishes after about 5 minutes.
+- Pressing `Ctrl+C` stops the run early and returns the rows collected so far (if nothing was collected yet, it stops as usual).
+- The interval is counted from the end of each scrape, so timestamps drift a few seconds later each round.
 
 ✅ **Example output:**  
 *(Sample DataFrame preview)*
