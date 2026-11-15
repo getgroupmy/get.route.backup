@@ -191,6 +191,18 @@ scraper.to_csv("today_traffic.csv")
 
 
 
+## 🖥 Run It as a Service (NAS)
+
+The scraper can also run as a small web API, the same way as GET.route:
+your app sends `GET /routes/search?from=LAT,LNG&to=LAT,LNG` with an
+`X-Route-Key` header and gets back the live drive time and distance as
+JSON. On a Synology NAS it runs in Docker behind a Cloudflare Tunnel.
+
+See [deploy/nas/README.md](deploy/nas/README.md) for the API and the setup
+steps.
+
+---
+
 ## ❗ Important Considerations
 
 - Always **click the "Details" button** on Google Maps before copying the URL.

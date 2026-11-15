@@ -1,0 +1,36 @@
+# The Google Maps traffic API on the office NAS (see README.md), set up the
+# same way as GET.route: one container with Chrome, reached only through a
+# Cloudflare Tunnel, so no port is opened on the NAS or the router.
+#
+#   traffic.getride.my -> http://traffic-scraper:8000   needs X-Route-Key
+#
+# Chrome opens on the first query, stays open between queries and closes
+# after 10 idle minutes.
+services:
+  traffic-scraper:
+    build: ../..
+    platform: linux/amd64
+    image: traffic-scraper:1
+    container_name: traffic-scraper
+    restart: unless-stopped
+    # Chrome needs a large /dev/shm (tmpfs: it only takes memory when used).
+    shm_size: 512m
+    environment:
+      PORT: "8000"
+      ROUTE_API_KEY: ${ROUTE_API_KEY:?Set ROUTE_API_KEY in .env (openssl rand -hex 32)}
+      CACHE_SECONDS: ${CACHE_SECONDS:-60}
+      BROWSER_IDLE: ${BROWSER_IDLE:-600}
+    expose:
+      - "8000"
+    mem_limit: ${MEM_LIMIT:-1g}
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    container_name: traffic-scraper-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set TUNNEL_TOKEN in .env}
+    depends_on:
+      - traffic-scraper
+    mem_limit: 256m
