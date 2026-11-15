@@ -19,7 +19,7 @@ You can install all necessary packages using either **conda** or **pip**.
 ### Using Conda
 
 ```bash
-conda create -n trafficscraper python=3.9
+conda create -n trafficscraper python=3.11
 conda activate trafficscraper
 pip install -r requirements.txt
 ```
