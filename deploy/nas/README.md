@@ -58,9 +58,10 @@ Differences from GET.route:
   is always a multiple of 60.
 - **No planned trips.** `depart_at` and `arrive_at` are refused with a 400;
   it always uses the traffic right now.
-- **One answer at a time.** There is one Chrome window; queries take turns.
-  Each takes about 3–10 s once Chrome is open. A query that waits more than
-  90 s for its turn gets a 503. Give your app a timeout of at least 60 s.
+- **A pool of Chrome windows.** Each window answers one lookup at a time;
+  several windows answer at once (see "How many windows" below). A lookup
+  that finds every window busy waits up to 10 s (`WAIT_FOR_CHROME`), then
+  gets a 503.
 - A repeat of the same trip within 60 s (`CACHE_SECONDS`) is answered from
   memory.
 
@@ -70,13 +71,14 @@ that fails to load is a 500.
 
 ## How the container works
 
-- **Chrome stays open.** On the NAS, Chrome opens when the container starts
-  (`WARM_ON_START=1`) and stays open (`BROWSER_IDLE=0`): GET.ride gives the
-  live-traffic steps only 3 s per trip, less than Chrome needs to start, so
-  a cold Chrome would make the Google Maps step miss. Elsewhere the default
-  is to open it on the first query and close it after 10 idle minutes.
-  `POST /warm` opens it ahead of time. If Chrome crashes, the next query
-  opens a new one (that query may miss the 3 s).
+- **Windows open as traffic needs them.** `WARM_WINDOWS` (2) open when the
+  container starts and stay open, because GET.ride allows only 3 s and a
+  cold window needs longer. When a lookup takes the last free window, the
+  next one starts opening in the background, up to `CHROME_WINDOWS` (40).
+  Extra windows close after `BROWSER_IDLE` (300 s) without a lookup.
+  `/health` (with the key) shows `windows_open`, `windows_busy` and
+  `windows_opening`. Images are switched off in every window: only the
+  route text is read.
 - **Failures heal themselves.** If Chrome crashes or a page fails to load,
   the window is closed and the next query opens a fresh one. Docker restarts
   the container if the API itself stops.
@@ -98,6 +100,46 @@ page, an unexpected layout).
 
 On your computer you can also watch Chrome work: start the API with
 `HEADLESS=0 python run.py` and a Chrome window opens for each query.
+
+## How many windows
+
+Measured with live Google Maps on a 4-CPU machine (the DS224+'s J4125 also
+has 4 cores, and is likely slower), trips around Kuala Lumpur, every
+window already open:
+
+| Lookups at the same time | Time each |
+|---|---|
+| 1 | 2.6 s |
+| 2 | 2.3–3.2 s |
+| 4 | 3.9–5.8 s |
+| 8 | 3.3–6.8 s |
+
+Each open window uses about 400 MB of memory.
+
+What this means:
+
+- **The CPU, not the number of windows, sets the pace.** Four cores
+  finish roughly 70 Google Maps lookups a minute however many windows share
+  them. More windows than that make every lookup slower, not more of them.
+- **GET.ride waits 3 s** (shared with Waze). About 2 lookups at a time stay
+  under it; beyond that, the extra lookups miss and GET.ride asks the AI.
+  That is safe (riders still get a fare), just not from Google Maps.
+- **Memory:** 40 windows would need about 16 GB. `MEM_LIMIT` (8 GB) caps the
+  container so the NAS and GET.route are never starved; past it, Chrome
+  windows are stopped and replaced, which shows up as failed lookups.
+- **Peak traffic:** at about 1,000 fare lookups a minute, Waze (GET.route,
+  ~368 a minute) answers first, so roughly 600 a minute reach Google Maps:
+  far more than one NAS can render. Expect most of them to fall through to
+  the AI at that peak. Google may also start showing bot checks to one
+  address making hundreds of Maps requests a minute.
+
+Raising `CHROME_WINDOWS` is cheap when it is quiet (windows only open when
+needed), but more than about 8 rarely helps on this NAS. To serve the peak
+from Google Maps, add machines (another NAS or mini PC running this
+container), not windows. List each in Admin › Fare AI with its own area
+(e.g. one per state): GET.ride sends a trip to the server for its pickup's
+area first and only moves to the next server when one fails, so servers
+without areas do not share the load.
 
 ## Security
 

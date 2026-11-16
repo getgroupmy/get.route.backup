@@ -37,6 +37,11 @@ def chrome_options(headless=True, chrome_binary=None, extra_args=None):
     # Headless Chrome defaults to 800x600, which can give Google Maps a
     # different (narrow) layout; use a normal desktop size.
     options.add_argument('--window-size=1366,900')
+    # Only the route panel's text is read: skip images (map tiles, photos),
+    # which roughly halves the CPU per lookup and saves memory.
+    options.add_argument('--blink-settings=imagesEnabled=false')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--mute-audio')
     if headless:
         options.add_argument('--headless=new')
     chrome_binary = chrome_binary or os.environ.get("CHROME_BIN")
