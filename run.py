@@ -21,9 +21,11 @@ def main():
     print(f"Try:  curl \"http://localhost:{config.PORT}/routes/search?from=-34.9285,138.6007&to=-34.9462,138.5312\"")
     if config.WARM_ON_START:
         from browser_client import chrome
-        chrome.warm()
-        print("Opening Chrome now (WARM_ON_START=1)")
-    server = wsgi.Server(("0.0.0.0", config.PORT), app, server_name="traffic-scraper", numthreads=16)
+        n = chrome.warm()
+        print(f"Opening {n} Chrome window(s) now (WARM_ON_START=1); up to {config.CHROME_WINDOWS} as traffic needs")
+    # One thread per Chrome window, plus some for /health and queued queries.
+    threads = max(16, config.CHROME_WINDOWS + 16)
+    server = wsgi.Server(("0.0.0.0", config.PORT), app, server_name="traffic-scraper", numthreads=threads)
     try:
         server.start()
     except KeyboardInterrupt:

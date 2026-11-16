@@ -30,10 +30,15 @@ services:
       PORT: "8000"
       ROUTE_API_KEY: ${ROUTE_API_KEY:?Set ROUTE_API_KEY in .env (openssl rand -hex 32)}
       CACHE_SECONDS: ${CACHE_SECONDS:-60}
-      # GET.ride gives live-traffic steps 3 s per trip, less than Chrome
-      # needs to start: open it at start-up and keep it open.
-      BROWSER_IDLE: ${BROWSER_IDLE:-0}
+      # A pool of Chrome windows, one lookup each at a time. WARM_WINDOWS are
+      # opened at start-up and kept open; more open (up to CHROME_WINDOWS)
+      # when every open one is busy, and close after BROWSER_IDLE seconds idle.
+      # Each open window uses about 400 MB; see README.md before raising these.
+      CHROME_WINDOWS: ${CHROME_WINDOWS:-40}
+      WARM_WINDOWS: ${WARM_WINDOWS:-2}
+      BROWSER_IDLE: ${BROWSER_IDLE:-300}
       WARM_ON_START: ${WARM_ON_START:-1}
+      WAIT_FOR_CHROME: ${WAIT_FOR_CHROME:-10}
     expose:
       - "8000"
     volumes:
@@ -42,7 +47,9 @@ services:
     networks:
       - default
       - get-route
-    mem_limit: ${MEM_LIMIT:-1g}
+    # 40 windows x ~400 MB would be ~16 GB; this cap protects the NAS (and
+    # GET.route) if the pool grows that far: Chrome is stopped, not the NAS.
+    mem_limit: ${MEM_LIMIT:-8g}
 
   # Only with --profile own-tunnel (when GET.route's tunnel isn't used).
   cloudflared:
