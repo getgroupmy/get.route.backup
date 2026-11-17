@@ -4,7 +4,10 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 import pandas as pd
+import base64
 import html
+import json
+import math
 import os
 import re
 import time
@@ -21,6 +24,9 @@ TRIP_PATTERN = re.compile(
 READY_TEXT = "Directions from"        # the "Details" view of a route
 TRIP_MARKER = 'data-trip-index="0"'   # the list of routes; trip 0 is Google's pick
 NO_ROUTE_TEXTS = ("could not calculate driving directions", "can't find a way there")
+# The page downloads its routes from this address; the answer has each
+# route's full road shape (see route_lines()).
+DIRECTIONS_RPC = "/maps/preview/directions"
 
 
 class NoRouteError(ValueError):
@@ -42,6 +48,10 @@ def chrome_options(headless=True, chrome_binary=None, extra_args=None):
     options.add_argument('--blink-settings=imagesEnabled=false')
     options.add_argument('--disable-extensions')
     options.add_argument('--mute-audio')
+    # Record the page's network answers so the road shape can be read from
+    # Google's own directions download (directions_rpc()); network only.
+    options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+    options.add_experimental_option('perfLoggingPrefs', {'enableNetwork': True, 'enablePage': False})
     if headless:
         options.add_argument('--headless=new')
     chrome_binary = chrome_binary or os.environ.get("CHROME_BIN")
@@ -78,6 +88,7 @@ def load_directions(driver, url, timeout=20, label=None):
     NoRouteError or ConnectionError."""
     label = label or url
     try:
+        _performance_log(driver)  # forget the previous page's network answers
         driver.get(url)
         for _ in range(timeout):
             time.sleep(1)
@@ -94,6 +105,123 @@ def load_directions(driver, url, timeout=20, label=None):
     saved = save_debug(driver, label)
     raise TimeoutError(f"Directions panel did not load within {timeout}s for {label} ({url})"
                        + (f"; page saved in {saved}" if saved else ""))
+
+
+def _performance_log(driver):
+    """The network events Chrome recorded since the last call (reading them
+    empties the buffer); [] when the driver doesn't record them."""
+    try:
+        return driver.get_log("performance") or []
+    except Exception:
+        return []
+
+
+def directions_rpc(driver):
+    """The body of the page's latest directions download (DIRECTIONS_RPC),
+    or None. Call it right after load_directions(), in the same window."""
+    request_id = None
+    for entry in _performance_log(driver):
+        try:
+            message = json.loads(entry["message"])["message"]
+            if (message.get("method") == "Network.responseReceived"
+                    and DIRECTIONS_RPC in message["params"]["response"]["url"]):
+                request_id = message["params"]["requestId"]
+        except Exception:
+            continue
+    if request_id is None:
+        return None
+    try:
+        answer = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
+    except Exception:
+        return None
+    body = answer.get("body")
+    if body and answer.get("base64Encoded"):
+        body = base64.b64decode(body).decode("utf-8", "replace")
+    return body or None
+
+
+def route_lines(rpc_body):
+    """Every route in a directions download: [{"name", "distance_meters",
+    "duration_seconds", "polyline": [{"lat", "lng"}, ...]}]. [] when the
+    answer can't be read (Google doesn't document it, so it may change).
+
+    The answer is JSON after a ")]}'" line. data[0][1][i][0] is route i's
+    summary: [_, name, [meters, "6.6 km"], [seconds, "15 min"]], the
+    seconds without traffic. data[0][7][i] is its road shape: [0] latitudes
+    and [1] longitudes in 1e-7 degrees, each after the first a change from
+    the one before."""
+    try:
+        data = json.loads(rpc_body[rpc_body.index("\n") + 1:] if rpc_body.startswith(")]}'") else rpc_body)
+        summaries, shapes = data[0][1], data[0][7]
+    except Exception:
+        return []
+    routes = []
+    for summary, shape in zip(summaries or [], shapes or []):
+        try:
+            head = summary[0]
+            lat = lng = 0
+            line = []
+            for d_lat, d_lng in zip(shape[0], shape[1]):
+                lat, lng = lat + d_lat, lng + d_lng
+                line.append({"lat": round(lat / 1e7, 7), "lng": round(lng / 1e7, 7)})
+            if len(line) < 2:
+                continue
+            routes.append({"name": head[1], "distance_meters": int(head[2][0]),
+                           "duration_seconds": int(head[3][0]), "polyline": line})
+        except Exception:
+            continue
+    return routes
+
+
+def route_line(rpc_body, found):
+    """The road shape of the route parse_route_page() found (its distance in
+    km and its "via" road), from the page's directions download; None when
+    no route there matches. The page shows distances rounded ("11.3 km"),
+    so a route within 100 m or 1.5 % counts; the one named like the page's
+    "via" road wins, then the closest."""
+    if not rpc_body or not found or found.get("distance") is None:
+        return None
+    meters = found["distance"] * 1000
+    near = [r for r in route_lines(rpc_body)
+            if abs(r["distance_meters"] - meters) <= max(100, 0.015 * meters)]
+    if not near:
+        return None
+    via = (found.get("via") or "").strip().lower()
+    near.sort(key=lambda r: (not via or (r["name"] or "").strip().lower() != via,
+                             abs(r["distance_meters"] - meters)))
+    return near[0]["polyline"]
+
+
+def simplify_line(line, meters=5):
+    """[line] with fewer points: a point within [meters] of the straight
+    line between the points kept around it is dropped (Douglas-Peucker), so
+    straight roads keep their ends and bends keep their shape. 0 keeps every
+    point. An 84 km trip goes from about 2,800 points to 400 at 5 m."""
+    if not line or len(line) < 3 or not meters or meters <= 0:
+        return line
+    # Metres on a flat map around the first point: plenty at city scale.
+    kx = 111_320 * math.cos(math.radians(line[0]["lat"]))
+    ky = 110_540
+    xy = [(p["lng"] * kx, p["lat"] * ky) for p in line]
+    keep = [False] * len(line)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(line) - 1)]
+    while stack:
+        a, b = stack.pop()
+        (x1, y1), (x2, y2) = xy[a], xy[b]
+        dx, dy = x2 - x1, y2 - y1
+        span = dx * dx + dy * dy
+        far, far_i = -1.0, None
+        for i in range(a + 1, b):
+            x, y = xy[i]
+            t = 0 if span == 0 else max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / span))
+            d = math.hypot(x - x1 - t * dx, y - y1 - t * dy)
+            if d > far:
+                far, far_i = d, i
+        if far_i is not None and far > meters:
+            keep[far_i] = True
+            stack += [(a, far_i), (far_i, b)]
+    return [p for p, k in zip(line, keep) if k]
 
 
 def save_debug(driver, label):

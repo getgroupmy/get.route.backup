@@ -28,8 +28,9 @@ curl -s -H "X-Route-Key: $ROUTE_API_KEY" \
 - `/waze/routes/search` works too, as on GET.route.
 
 The answer has GET.route's fields. Google Maps gives one route (the one it
-recommends), so `count` is 1 and the fields Waze fills but Google doesn't
-(`polyline`, `jams`, `alerts`, `toll`) are empty:
+recommends), so `count` is 1. `polyline` is that route's road shape, as on
+GET.route; the fields that only Waze fills (`jams`, `alerts`, `toll`) are
+empty:
 
 ```json
 {
@@ -43,6 +44,7 @@ recommends), so `count` is 1 and the fields Waze fills but Google doesn't
     "is_fastest": true,
     "is_toll": false,
     "traffic_status": "Fastest route, the usual traffic",
+    "polyline": [{"lat": 3.1579046, "lng": 101.7116029}, {"lat": 3.1574693, "lng": 101.7115639}, "…"],
     "link": "https://www.google.com/maps/dir/3.1579,101.7116/3.134,101.6862/data=!4m2!4m1!3e0?hl=en"
   }],
   "source": "google_maps",
@@ -51,6 +53,11 @@ recommends), so `count` is 1 and the fields Waze fills but Google doesn't
 ```
 
 *Trimmed for readability; the values are only an example.*
+
+`polyline` is the road shape as `{lat, lng}` points, thinned to
+`POLYLINE_TOLERANCE` metres (5): about 400 points (16 KB) for KLCC to KLIA.
+It is `null` when Google's data can't be read; the time and distance still
+come back.
 
 Differences from GET.route:
 

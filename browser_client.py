@@ -20,7 +20,7 @@ import threading
 import time
 
 import config
-from TrafficScraper import chrome_options, load_directions, new_driver
+from TrafficScraper import chrome_options, directions_rpc, load_directions, new_driver
 
 
 class BusyError(Exception):
@@ -93,8 +93,10 @@ class ChromePool:
 
     # ---- queries -----------------------------------------------------------------------------
 
-    def fetch(self, url, label, wait_for_turn):
-        """Load a directions page in a free window and return its HTML."""
+    def fetch(self, url, label, wait_for_turn, with_rpc=False):
+        """Load a directions page in a free window and return its HTML; with
+        [with_rpc], (HTML, the page's directions download or None), read
+        from the same window before another query can use it."""
         deadline = time.time() + wait_for_turn
         must_open = False
         with self._cv:
@@ -127,7 +129,8 @@ class ChromePool:
             except Exception as e:
                 raise ConnectionError(f"Chrome did not start: {e}")
         try:
-            return load_directions(w.driver, url, label=label)
+            page = load_directions(w.driver, url, label=label)
+            return (page, directions_rpc(w.driver)) if with_rpc else page
         except ConnectionError:
             self._discard(w)  # broken window: a fresh one opens when needed
             raise
