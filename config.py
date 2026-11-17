@@ -19,6 +19,9 @@ environment variable; the defaults work out of the box.
                    starts, so the first queries don't wait (default 0)
     HEADLESS       0 shows the Chrome window (to watch it on your computer;
                    default 1 = hidden)
+    POLYLINE_TOLERANCE  the answer's road shape (polyline) drops points within
+                   this many metres of a straight line, to keep the answer
+                   small (default 5; 0 = every point Google sends)
     DEBUG_DIR      when a page fails to load, save a screenshot, its HTML and
                    a summary here (default: debug; empty = don't save)
 """
@@ -31,6 +34,7 @@ CHROME_WINDOWS = int(os.environ.get("CHROME_WINDOWS", "1"))
 WARM_WINDOWS = int(os.environ.get("WARM_WINDOWS", "0"))
 HEADLESS = os.environ.get("HEADLESS", "1") != "0"
 WARM_ON_START = os.environ.get("WARM_ON_START", "0") == "1"
+POLYLINE_TOLERANCE = float(os.environ.get("POLYLINE_TOLERANCE", "5"))
 os.environ.setdefault("DEBUG_DIR", "debug")  # read by TrafficScraper.save_debug
 
 # How long a query waits for a free Chrome window when all are busy. GET.ride

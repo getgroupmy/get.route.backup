@@ -39,6 +39,8 @@ services:
       BROWSER_IDLE: ${BROWSER_IDLE:-300}
       WARM_ON_START: ${WARM_ON_START:-1}
       WAIT_FOR_CHROME: ${WAIT_FOR_CHROME:-10}
+      # The road shape drops points within this many metres of a straight line.
+      POLYLINE_TOLERANCE: ${POLYLINE_TOLERANCE:-5}
     expose:
       - "8000"
     volumes:

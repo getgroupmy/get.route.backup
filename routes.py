@@ -10,7 +10,9 @@ and `to` also take an address or place name. With ROUTE_API_KEY set, every
 endpoint but /health needs it in the X-Route-Key header.
 
 The answer has GET.route's /routes/search fields. Google Maps gives one route
-(the one it recommends), its time in whole minutes and no polyline, jams or
+(the one it recommends), its time in whole minutes, its road shape
+(`polyline`: [{lat, lng}, ...] from start to end, thinned to POLYLINE_TOLERANCE
+metres; null when it can't be read) and no jams or
 toll prices; those fields are present but empty.
 """
 import datetime
@@ -25,7 +27,7 @@ from bottle import HTTPResponse, hook, request, response, route
 
 import config
 from browser_client import BusyError, chrome
-from TrafficScraper import NoRouteError, parse_route_page
+from TrafficScraper import NoRouteError, parse_route_page, route_line, simplify_line
 
 OPEN_PATHS = {"/", "/health"}
 GOOGLE_HOSTS = {"www.google.com", "google.com", "maps.google.com"}
@@ -110,8 +112,9 @@ def _search(trip):
         hit = _cache.get(key)
     if hit and config.CACHE_SECONDS > 0 and now - hit[0] < config.CACHE_SECONDS:
         return json.loads(hit[1])
-    page = chrome.fetch(trip["url"], label="the trip", wait_for_turn=config.WAIT_FOR_CHROME)
+    page, rpc = chrome.fetch(trip["url"], label="the trip", wait_for_turn=config.WAIT_FOR_CHROME, with_rpc=True)
     found = parse_route_page(page, "the trip")
+    line = simplify_line(route_line(rpc, found), config.POLYLINE_TOLERANCE)
     result = {
         "from": trip["from"],
         "to": trip["to"],
@@ -135,7 +138,7 @@ def _search(trip):
             "attributes": [],
             "jams": [],
             "alerts": [],
-            "polyline": None,
+            "polyline": line,
             "link": trip["url"],
         }],
         "source": "google_maps",
