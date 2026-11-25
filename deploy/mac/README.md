@@ -6,7 +6,7 @@ is much faster than the NAS's, and on the NAS the processor was the limit
 (see "How many windows" there).
 
 ```
-                        ┌─ 1st: traffic-mac.getride.my ─ Tunnel ─► Mac mini   (primary)
+                        ┌─ 1st: gmap.getcdn.link ────── Tunnel ─► Mac mini   (primary)
  GET.ride ──https──►  ──┤
   (X-Route-Key)         └─ 2nd: traffic.getride.my ───── Tunnel ─► NAS        (backup)
 ```
@@ -97,18 +97,19 @@ Mac first:
      ```bash
      sudo cloudflared service install <TOKEN>
      ```
-   - **Public hostname:** `traffic-mac.getride.my` → type **HTTP**, URL
+   - **Public hostname:** `gmap.getcdn.link` → type **HTTP**, URL
      `localhost:8000`.
 
-   GET.ride's subdomain worker sends every unknown `*.getride.my` name to the
-   web app, so `traffic-mac` is in its pass-through list
-   (`cloudflare/subdomain-proxy/wrangler.toml` in get-ride, `PASS_THROUGH`).
+   It is on `getcdn.link`, like the Waze console (`waze.getcdn.link`), not on
+   `getride.my`: GET.ride's subdomain worker answers unknown `*.getride.my`
+   names with the web app, and `getcdn.link` has no such worker, so nothing
+   in GET.ride needs to change.
 
-5. Check it from anywhere: `https://traffic-mac.getride.my/health` answers
+5. Check it from anywhere: `https://gmap.getcdn.link/health` answers
    `{"status": "ok", ...}`.
 
 6. In GET.ride, Admin › Settings › Fare AI provider › Google Maps servers:
-   - **Add server:** name `Mac mini`, URL `https://traffic-mac.getride.my`,
+   - **Add server:** name `Mac mini`, URL `https://gmap.getcdn.link`,
      Key: the `ROUTE_API_KEY` in `~/traffic-scraper/deploy/mac/.env`
      (`grep ROUTE_API_KEY ~/traffic-scraper/deploy/mac/.env`).
    - Press **Test**.
