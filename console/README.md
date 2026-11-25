@@ -107,8 +107,18 @@ and uses GET.route's Cloudflare Tunnel; it needs no browser and little memory
    cd /volume1/docker/gmap-console && sudo docker compose up -d --build
    ```
 
-4. The NAS's scraper answers on the office network too (port 8001), for the
-   Mac's console. Update it to the latest `main` (this also lowers its
+4. The NAS's scraper answers on the office network too (port 8301, set by
+   `LAN_PORT` in its `.env`), for the Mac's console. Check nothing else on
+   the NAS uses that port first (nothing printed):
+
+   ```bash
+   sudo netstat -tln | grep ':8301 '
+   ```
+
+   If something does, add `LAN_PORT=` with a free port to
+   `/volume1/docker/traffic-scraper/deploy/nas/.env` and use that port below.
+
+   Then update it to the latest `main` (this also lowers its
    `WAIT_FOR_CHROME` to 1 s, so a busy scraper answers quickly and the
    console moves on):
 

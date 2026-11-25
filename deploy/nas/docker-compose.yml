@@ -46,9 +46,9 @@ services:
     expose:
       - "8000"
     # On the office network too, for the Google Maps console on the Mac mini
-    # (its second server, http://192.168.0.13:8001). Every call needs the key.
+    # (its second server, http://192.168.0.13:8301). Every call needs the key.
     ports:
-      - "${LAN_PORT:-8001}:8000"
+      - "${LAN_PORT:-8301}:8000"
     volumes:
       # Pages Chrome saw when a query failed (see README.md).
       - ./debug:/app/debug
