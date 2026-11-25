@@ -4,7 +4,7 @@ Two consoles, so Google Maps keeps working when either machine is down:
 
 ```
                     ┌─► gmap.getcdn.link  ─ Mac's tunnel ─► console on the Mac ─┬─► Mac scraper  http://127.0.0.1:8000      first
- GET.ride ──────────┤   (Google Maps server 1)                                  └─► NAS scraper  http://192.168.0.13:8001   second
+ GET.ride ──────────┤   (Google Maps server 1)                                  └─► NAS scraper  http://192.168.0.13:8301   second
  (Google Maps       │
   servers)          └─► gmap2.getcdn.link ─ NAS's tunnel ─► console on the NAS ─┬─► NAS scraper  http://traffic-scraper:8000 first
                         (Google Maps server 2)                                  └─► Mac scraper  http://192.168.0.101:8000  second
@@ -107,9 +107,9 @@ grep ^GM_ADMIN_TOKEN ~/traffic-scraper/console/deploy/mac/.env | cut -d= -f2 | t
      ```bash
      grep ^ROUTE_API_KEY ~/traffic-scraper/deploy/mac/.env | cut -d= -f2 | tr -d '\n' | pbcopy && echo "key copied"
      ```
-   - **NAS scraper**: `http://192.168.0.13:8001`, the NAS scraper's key (on
+   - **NAS scraper**: `http://192.168.0.13:8301`, the NAS scraper's key (on
      the NAS: `sudo docker exec traffic-scraper printenv ROUTE_API_KEY`). The
-     NAS's scraper answers on port 8001 once it is updated (step 4 of
+     NAS's scraper answers on port 8301 once it is updated (step 4 of
      [the NAS console's set-up](../../README.md)).
 
    **Test** each.

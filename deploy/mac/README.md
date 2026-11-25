@@ -11,7 +11,7 @@ the scrapers in order:
 
 ```
                 ┌─► gmap.getcdn.link  ─► console on the Mac ─┬─► Mac scraper  http://127.0.0.1:8000     first
- GET.ride ──────┤                                            └─► NAS scraper  http://192.168.0.13:8001  second
+ GET.ride ──────┤                                            └─► NAS scraper  http://192.168.0.13:8301  second
  other apps     └─► gmap2.getcdn.link ─► console on the NAS ─┬─► NAS scraper  http://traffic-scraper:8000 first
  (a key each)                                                └─► Mac scraper  http://192.168.0.101:8000 second
 ```
@@ -118,12 +118,30 @@ screenshot first.
 
 ## How many windows
 
-`env.example` starts at 16 windows, 4 always open. Each window uses about
-400 MB, so 16 need about 6.4 GB. Once the Mac is reachable, measure it the way
-the NAS was measured (1, 2, 4, 8, 16 lookups at the same time) and set
-`CHROME_WINDOWS` to the most it answers within about 3 s. Raise
-`WARM_WINDOWS` to what busy hours need, so riders don't wait for a window to
-open.
+Measured on the Mac mini through `gmap.getcdn.link` (26 Nov 2026), every
+lookup a different trip, with GET.ride's 3.5 s limit:
+
+| At once | Answered within 3.5 s |
+|---|---|
+| 1, 2, 4 | all |
+| 8, windows already open | 8 of 8 |
+| 8, only 4 open | 5 of 8 (the rest waited for windows to start) |
+| 16, 8 new windows starting together | 0 of 16 |
+
+Starting Chrome is the heavy part, not answering: many windows starting at
+once take the whole processor and every lookup misses. So `env.example`
+keeps 8 windows open all the time (`WARM_WINDOWS=8`, about 3.2 GB) and caps
+the pool at 10 (`CHROME_WINDOWS=10`). A lookup beyond that answers 503
+after 1 s and the console asks the NAS.
+
+To change them, edit `deploy/mac/.env` (typing `WARM_WINDOWS=8` at the
+prompt doesn't change the file):
+
+```bash
+cd ~/traffic-scraper/deploy/mac && sed -i '' 's/^WARM_WINDOWS=.*/WARM_WINDOWS=8/; s/^CHROME_WINDOWS=.*/CHROME_WINDOWS=10/' .env && grep WINDOWS .env
+```
+
+then restart (`launchctl kickstart -k gui/$(id -u)/my.getride.traffic-scraper`).
 
 ## Notes
 

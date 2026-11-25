@@ -10,6 +10,7 @@ import json
 import math
 import os
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -64,13 +65,39 @@ def chrome_options(headless=True, chrome_binary=None, extra_args=None):
     return options
 
 
+# Chrome and chromedriver as Selenium Manager found them, looked up once per
+# process (see new_driver).
+_found_paths = None
+_found_lock = threading.Lock()
+
+
+def _selenium_manager_paths(options):
+    """(driver path, browser path) from Selenium Manager, asked only once.
+
+    Without a driver path Selenium runs Selenium Manager for every Chrome it
+    starts, and each run rewrites ~/.cache/selenium/se-metadata.json. When a
+    pool opens several windows at once those runs overwrite each other
+    ("se-metadata.json cannot be parsed") and every start is slower. One
+    lookup, kept for the life of the process, avoids both."""
+    global _found_paths
+    with _found_lock:
+        if _found_paths is None:
+            from selenium.webdriver.common.driver_finder import DriverFinder
+            finder = DriverFinder(Service(), options)
+            _found_paths = (finder.get_driver_path(), finder.get_browser_path())
+        return _found_paths
+
+
 def new_driver(options, driver_path=None):
     """Start Chrome. driver_path defaults to CHROMEDRIVER_PATH; without one,
-    Selenium downloads a matching chromedriver itself."""
+    Selenium Manager finds (and if needed downloads) a matching chromedriver,
+    once per process."""
     driver_path = driver_path or os.environ.get("CHROMEDRIVER_PATH")
-    if driver_path:
-        return webdriver.Chrome(service=Service(driver_path), options=options)
-    return webdriver.Chrome(options=options)
+    if not driver_path:
+        driver_path, browser_path = _selenium_manager_paths(options)
+        if browser_path and not options.binary_location:
+            options.binary_location = browser_path
+    return webdriver.Chrome(service=Service(driver_path), options=options)
 
 
 def _visible_text(driver):
