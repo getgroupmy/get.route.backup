@@ -76,6 +76,13 @@ Errors, as on GET.route: a bad parameter is a 400 naming the field, "no
 route between these places" is a 400, a wrong key is a 401, and a page
 that fails to load is a 500.
 
+## Mac mini as primary, NAS as backup
+
+A Mac mini can answer the lookups first, with the NAS as the backup: GET.ride
+asks the Google Maps servers in the order listed in Admin › Fare AI provider,
+and moves to the next one when a server fails. The Mac runs the scraper
+natively (not in Docker) behind a tunnel of its own. Setup: [../mac/README.md](../mac/README.md).
+
 ## How the container works
 
 - **Windows open as traffic needs them.** `WARM_WINDOWS` (2) open when the

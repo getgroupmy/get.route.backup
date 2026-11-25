@@ -29,3 +29,6 @@ Thumbs.db
 **/debug/*
 # ...but keep the NAS mount folder, which Synology's Docker won't create itself
 !deploy/nas/debug/.gitkeep
+
+# The Mac service log (deploy/mac/install.sh)
+deploy/mac/logs/
