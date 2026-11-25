@@ -1,0 +1,38 @@
+# Google Maps console on the office NAS (see README.md): one small container
+# in front of the Traffic Scrapers, reached through GET.route's Cloudflare
+# Tunnel:
+#
+#   gmap2.getcdn.link -> http://gmap-console:8080
+#
+# (gmap.getcdn.link is the same console on the Mac mini, deploy/mac.)
+#
+# It joins GET.route's Docker network, as the NAS's traffic-scraper does, so
+# that scraper is http://traffic-scraper:8000 and the tunnel reaches the
+# console by name. The Mac mini's scraper is reached on the office network
+# (http://192.168.0.101:8000).
+name: gmap-console
+
+services:
+  gmap-console:
+    build: .
+    image: gmap-console:1
+    container_name: gmap-console
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GM_DATA_DIR: /data
+    volumes:
+      - ${GM_DATA_PATH:?Set GM_DATA_PATH in .env}:/data
+    # The console on the NAS itself only (http://127.0.0.1:8089/admin over SSH
+    # or the NAS's own browser); everyone else comes through the tunnel.
+    ports:
+      - "127.0.0.1:8089:8080"
+    networks:
+      - default
+      - get-route
+    mem_limit: 256m
+
+networks:
+  get-route:
+    external: true
+    name: ${GET_ROUTE_NETWORK:?Set GET_ROUTE_NETWORK in .env (GET.route's Docker network name)}

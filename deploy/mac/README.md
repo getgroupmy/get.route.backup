@@ -1,32 +1,24 @@
-# Traffic Scraper on the Mac mini (primary)
+# Traffic Scraper on the Mac mini
 
-The Mac mini answers GET.ride's Google Maps lookups, and the NAS
-([deploy/nas](../nas/README.md)) stays on as the backup. The Mac's processor
-is much faster than the NAS's, and on the NAS the processor was the limit
-(see "How many windows" there).
+The Mac mini runs a Traffic Scraper of its own, next to the NAS's
+([deploy/nas](../nas/README.md)). Its processor is much faster than the
+NAS's, and on the NAS the processor was the limit (see "How many windows"
+there).
+
+Apps don't call the scrapers directly: they call the **Google Maps console**
+([console](../../console/README.md)), which runs on both machines and asks
+the scrapers in order:
 
 ```
-                        ┌─ 1st: gmap.getcdn.link ────── Tunnel ─► Mac mini   (primary)
- GET.ride ──https──►  ──┤
-  (X-Route-Key)         └─ 2nd: traffic.getride.my ───── Tunnel ─► NAS        (backup)
+                ┌─► gmap.getcdn.link  ─► console on the Mac ─┬─► Mac scraper  http://127.0.0.1:8000     first
+ GET.ride ──────┤                                            └─► NAS scraper  http://192.168.0.13:8001  second
+ other apps     └─► gmap2.getcdn.link ─► console on the NAS ─┬─► NAS scraper  http://traffic-scraper:8000 first
+ (a key each)                                                └─► Mac scraper  http://192.168.0.101:8000 second
 ```
 
-## How primary and backup work
-
-GET.ride asks the Google Maps servers in the order they are listed in
-Admin › Settings › Fare AI provider › Google Maps servers, with the
-Mac first:
-
-- **The Mac answers:** that's the fare. The NAS isn't asked.
-- **The Mac fails** (stopped, asleep, unreachable, an error): GET.ride asks
-  the NAS with the time left in the Google Maps limit (3.5 s), and rests the
-  Mac for 1 minute (Admin › Fare AI provider › "Retry after"). For that
-  minute every lookup goes straight to the NAS, then the Mac is tried again.
-- **The Mac is full** (every window busy): it answers 503 after
-  `WAIT_FOR_CHROME` (1 s), so the NAS still gets the rest of the time. It is
-  also rested for that minute, so size the Mac's window pool so this is rare.
-- **Both fail:** the fare moves on to the next step (Apple Maps, AI, OSRM),
-  as it does today.
+This page sets up the **scraper** on the Mac. The console on the Mac is in
+[console/deploy/mac](../../console/deploy/mac/README.md), and needs this
+scraper running first.
 
 ## What the Mac needs
 
@@ -35,7 +27,7 @@ Mac first:
 - [Homebrew](https://brew.sh), then Python and Chrome:
 
   ```bash
-  brew install python@3.13 cloudflared git
+  brew install python@3.13 git
   ```
   ```bash
   brew install --cask google-chrome
@@ -86,35 +78,21 @@ Mac first:
 
    It prints the seconds, metres and polyline points.
 
-4. **A tunnel of its own.** The Mac can't join GET.route's tunnel on the
-   NAS: Cloudflare would share requests between the two machines, and each
-   only knows its own addresses. In Cloudflare Zero Trust › Networks ›
-   Tunnels:
-   - **Create a tunnel** › Cloudflared, name it `traffic-mac`, choose
-     **macOS**, and copy the token from the command it shows.
-   - On the Mac, run it as a service that starts at boot:
+4. **Reachable from the NAS.** The NAS's console asks this scraper as its
+   second server, at `http://192.168.0.101:8000` (the Mac's fixed address on
+   the office network). The scraper already listens on every address of the
+   Mac and needs its key for every call. If the macOS firewall is on, allow
+   incoming connections for Python when macOS asks, or in System Settings ›
+   Network › Firewall › Options. Check from the NAS:
 
-     ```bash
-     sudo cloudflared service install <TOKEN>
-     ```
-   - **Public hostname:** `gmap.getcdn.link` → type **HTTP**, URL
-     `localhost:8000`.
+   ```bash
+   curl -s -m 5 http://192.168.0.101:8000/health; echo
+   ```
 
-   It is on `getcdn.link`, like the Waze console (`waze.getcdn.link`), not on
-   `getride.my`: GET.ride's subdomain worker answers unknown `*.getride.my`
-   names with the web app, and `getcdn.link` has no such worker, so nothing
-   in GET.ride needs to change.
+   It answers `{"status": "ok", ...}`.
 
-5. Check it from anywhere: `https://gmap.getcdn.link/health` answers
-   `{"status": "ok", ...}`.
-
-6. In GET.ride, Admin › Settings › Fare AI provider › Google Maps servers:
-   - **Add server:** name `Mac mini`, URL `https://gmap.getcdn.link`,
-     Key: the `ROUTE_API_KEY` in `~/traffic-scraper/deploy/mac/.env`
-     (`grep ROUTE_API_KEY ~/traffic-scraper/deploy/mac/.env`).
-   - Press **Test**.
-   - Press **Ask earlier** (↑) until the Mac is first, above the NAS.
-   - Rename the NAS card to `NAS (backup)` if you like, and **Save**.
+   The scraper has no public address of its own: `gmap.getcdn.link` goes to
+   the console, which then asks this scraper.
 
 ## Updating
 
@@ -152,5 +130,5 @@ open.
 - Google sees every lookup from your office's internet address, whichever
   machine makes it. Moving lookups to the Mac doesn't change how many Google
   Maps requests that address makes.
-- The Mac and the NAS each have their own key. Both are only in their
-  `.env` files and in GET.ride's admin page.
+- The Mac and the NAS scrapers each have their own key. Each is only in its
+  `.env` file and in the two consoles' server lists.

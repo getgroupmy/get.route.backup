@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Google Maps console</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --ink:#16202c; --mute:#667085; --line:#e3e6eb; --brand:#1f6fb2;
+          --ok:#12805c; --bad:#c0362c; --warn:#b26a00; --info:#3b5bdb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#10151b; --card:#19212b; --ink:#e8edf3; --mute:#93a0b1; --line:#2a3542; --brand:#5aa9e6;
+            --ok:#3ecf9a; --bad:#ff7b72; --warn:#f0b34a; --info:#8da2ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:12px 20px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0 12px 0 0; }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
+  nav button { background:none; border:0; color:var(--mute); padding:8px 12px; border-radius:8px; font:inherit; cursor:pointer; }
+  nav button.on { background:var(--bg); color:var(--ink); font-weight:600; }
+  #who { margin-left:auto; color:var(--mute); font-size:13px; }
+  main { max-width:1180px; margin:0 auto; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:15px; margin:0 0 12px; }
+  .scroll { overflow-x:auto; }
+  .scroll th, .scroll td { white-space:nowrap; }
+  .scroll td.wrap { white-space:normal; min-width:12rem; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); font-weight:600; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid currentColor; white-space:nowrap; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); } .info { color:var(--info); } .mute { color:var(--mute); font-size:13px; }
+  input, select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); width:100%; }
+  label { display:block; font-size:12px; color:var(--mute); margin:10px 0 4px; }
+  button.btn { font:inherit; font-weight:600; padding:7px 13px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.btn:focus-visible, nav button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+  button.danger { color:var(--bad); }
+  button:disabled { opacity:.5; cursor:default; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; align-items:end; }
+  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 16px; min-width:120px; }
+  .stat b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .key { font-family:ui-monospace,monospace; word-break:break-all; }
+  .acts { white-space:nowrap; } .acts .btn + .btn { margin-left:6px; }
+  .hide { display:none !important; }
+  .spark { display:flex; gap:2px; align-items:flex-end; height:60px; }
+  .spark div { flex:1; background:var(--brand); border-radius:2px 2px 0 0; min-height:2px; opacity:.85; }
+  .spark div.f { background:var(--bad); }
+  .note { background:var(--bg); border-radius:8px; padding:10px 12px; margin-top:10px; }
+  .wrap { overflow-wrap:anywhere; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GET.route · Google Maps</h1>
+  <nav id="nav" class="hide">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="log">Request log</button>
+    <button data-tab="clients">Apps</button>
+    <button data-tab="servers">Servers</button>
+    <button data-tab="try">Try it</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="admins">Admins</button>
+    <button data-tab="audit">Audit</button>
+  </nav>
+  <span id="who"></span>
+  <button class="btn hide" id="logout" type="button">Sign out</button>
+</header>
+<main>
+  <p id="toast" class="note hide" role="status"></p>
+  <section id="login" class="card hide" style="max-width:420px;margin:60px auto">
+    <h2>Sign in</h2>
+    <form id="pwForm">
+      <label for="user">Username</label><input id="user" autocomplete="username">
+      <label for="pass">Password</label><input id="pass" type="password" autocomplete="current-password">
+      <label style="display:flex;gap:8px;align-items:center"><input id="remember" type="checkbox" style="width:auto"> Keep me signed in for 30 days</label>
+      <p id="loginErr" class="bad"></p>
+      <button class="btn primary" type="submit">Sign in</button>
+      <button class="btn" id="useToken" type="button" style="margin-left:6px">Use admin token instead</button>
+    </form>
+    <div id="tokenForm" class="hide">
+      <label for="token">Admin token (GM_ADMIN_TOKEN)</label><input id="token" type="password" autocomplete="off">
+      <p class="mute">Kept only in this tab; closing it signs you out.</p>
+      <button class="btn primary" id="tokenBtn" type="button">Continue</button>
+    </div>
+    <p id="firstrun" class="mute hide">No console users yet. Sign in once with the admin token, then create your username and password under <b>Admins</b>.</p>
+  </section>
+
+  <section id="tab-overview" class="tab hide">
+    <div class="stats" id="ovStats"></div>
+    <div class="card"><h2>Calls in the last 24 hours, by hour</h2><div class="spark" id="ovSpark"></div><p class="mute" id="ovSparkNote"></p></div>
+    <div class="card"><h2>Servers</h2><div class="scroll"><table><thead><tr><th>Order</th><th>Server</th><th>Health</th><th>Resting</th><th>Last problem</th></tr></thead><tbody id="ovServers"></tbody></table></div></div>
+    <div class="grid" style="align-items:start">
+      <div class="card"><h2>By app (24 h)</h2><table><thead><tr><th>App</th><th>Calls</th><th>Answered</th><th>Median</th></tr></thead><tbody id="ovClients"></tbody></table></div>
+      <div class="card"><h2>By server (24 h)</h2><table><thead><tr><th>Server</th><th>Calls</th><th>Answered</th><th>Median</th></tr></thead><tbody id="ovByServer"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-log" class="tab hide">
+    <div class="card">
+      <div class="bar" style="margin-bottom:10px">
+        <h2 style="margin:0">Request log</h2>
+        <label style="display:flex;gap:6px;align-items:center;margin:0 0 0 auto"><input id="logFailed" type="checkbox" style="width:auto"> Only failures</label>
+        <button class="btn" id="logRefresh" type="button">Refresh</button>
+      </div>
+      <p class="mute">The newest 200 calls. No places, coordinates or keys are kept: which app, which endpoint, which server answered and how long it took.</p>
+      <div class="scroll"><table><thead><tr><th>Time</th><th>App</th><th>Endpoint</th><th>Result</th><th>Server</th><th>Took</th><th>Problem</th></tr></thead><tbody id="logRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-clients" class="tab hide">
+    <div class="card" data-perm="clients.manage">
+      <h2>New app</h2>
+      <div class="grid">
+        <div><label for="cName">Name</label><input id="cName" placeholder="GET.ride fares"></div>
+        <div><label for="cRate">Calls a minute (most)</label><input id="cRate" type="number" min="1" placeholder="default"></div>
+        <div><button class="btn primary" id="cCreate" type="button">Create key</button></div>
+      </div>
+      <div id="cNew" class="note hide"></div>
+    </div>
+    <div class="card"><h2>Apps</h2>
+      <p class="mute">Each app sends its key in <span class="key">X-Route-Key</span> (or <span class="key">X-API-Key</span>). A revoked key stops working at once.</p>
+      <div class="scroll"><table><thead><tr><th>App</th><th>Key</th><th>Limit</th><th>Last minute</th><th>Last used</th><th></th></tr></thead><tbody id="cRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-servers" class="tab hide">
+    <div class="card"><h2>Google Maps servers, in the order they are asked</h2>
+      <p class="mute">A call goes to the first server that is on and not resting. A server that doesn't answer in its time, or answers with a failure, rests and the call moves to the next one. Health is checked every minute.</p>
+      <div class="scroll"><table><thead><tr><th>Order</th><th>Server</th><th>Address</th><th>Time</th><th>Rest</th><th>Health</th><th></th></tr></thead><tbody id="sRows"></tbody></table></div>
+      <div id="sTest" class="note hide"></div>
+    </div>
+    <div class="card" data-perm="backends.manage">
+      <h2 id="sFormTitle">Add a server</h2>
+      <div class="grid">
+        <div><label for="sName">Name</label><input id="sName" placeholder="Mac mini"></div>
+        <div><label for="sUrl">Address</label><input id="sUrl" placeholder="http://127.0.0.1:8000"></div>
+        <div><label for="sKey">Its ROUTE_API_KEY</label><input id="sKey" type="password" autocomplete="off" placeholder="paste the key"></div>
+        <div><label for="sTimeout">Time per call (ms)</label><input id="sTimeout" type="number" min="300" value="4000"></div>
+        <div><label for="sRest">Rest after a failure (s)</label><input id="sRest" type="number" min="0" value="60"></div>
+        <div class="bar"><button class="btn primary" id="sSave" type="button">Add</button><button class="btn hide" id="sCancel" type="button">Cancel</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-try" class="tab hide">
+    <div class="card"><h2>Try it</h2>
+      <p class="mute">One route through the service exactly as an app's call goes: servers in order, failover included. It makes one Google Maps lookup.</p>
+      <div class="grid">
+        <div><label for="tFrom">From (lat,lng or a place)</label><input id="tFrom" value="3.158,101.712"></div>
+        <div><label for="tTo">To</label><input id="tTo" value="3.134,101.686"></div>
+        <div><button class="btn primary" id="tGo" type="button">Find the route</button></div>
+      </div>
+      <div id="tOut" class="note hide"></div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tab hide">
+    <div class="card"><h2>Settings</h2>
+      <div class="grid">
+        <div><label for="stTotal">Most time for one call, every server included (ms)</label><input id="stTotal" type="number"></div>
+        <div><label for="stRate">A new app's calls a minute</label><input id="stRate" type="number"></div>
+        <div><label for="stDays">Keep the request log (days)</label><input id="stDays" type="number"></div>
+        <div data-perm="settings.manage"><button class="btn primary" id="stSave" type="button">Save</button></div>
+      </div>
+      <p class="mute" id="stMsg"></p>
+    </div>
+  </section>
+
+  <section id="tab-admins" class="tab hide">
+    <div class="card"><h2>Console users</h2>
+      <p class="mute">Each person signs in with their own username and password; the audit trail shows who changed what. Entering an existing username changes its role and, if given, its password.</p>
+      <div class="grid">
+        <div><label for="aUser">Username</label><input id="aUser"></div>
+        <div><label for="aPass">Password (10+ characters)</label><input id="aPass" type="password" autocomplete="new-password"></div>
+        <div><label for="aRole">Role</label><select id="aRole"></select></div>
+        <div><button class="btn primary" id="aSave" type="button">Save user</button></div>
+      </div>
+      <p class="mute" id="aMsg"></p>
+      <div class="scroll"><table><thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th></th></tr></thead><tbody id="aRows"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-audit" class="tab hide">
+    <div class="card"><div class="bar" style="margin-bottom:10px"><h2 style="margin:0">Audit trail</h2><button class="btn" id="auVerify" type="button" style="margin-left:auto">Check it hasn't been changed</button></div>
+      <p class="mute" id="auMsg"></p>
+      <div class="scroll"><table><thead><tr><th>Time</th><th>Who</th><th>What</th><th>On</th><th>Detail</th></tr></thead><tbody id="auRows"></tbody></table></div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let token = sessionStorage.getItem("wzToken") || "";
+let me = null;
+
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null) continue;
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e[k] = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+const when = s => s ? new Date(s).toLocaleString() : "";
+const ms = v => v == null ? "–" : (v / 1000).toFixed(1) + " s";
+const can = p => me && me.permissions.includes(p);
+
+async function api(path, opts = {}) {
+  const r = await fetch("/admin/api" + path, { ...opts, headers: { ...(token ? { "X-Admin-Token": token } : {}), ...(opts.body ? { "Content-Type": "application/json" } : {}) } });
+  if (r.status === 401) { show(false); throw new Error("signed out"); }
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(typeof m === "string" ? m : JSON.stringify(m)); }
+  return r.status === 204 ? null : r.json();
+}
+
+async function refreshMe() {
+  const r = await fetch("/admin/session/me", { headers: token ? { "X-Admin-Token": token } : {} });
+  me = await r.json();
+  show(me.signed_in);
+}
+
+function show(authed) {
+  $("login").classList.toggle("hide", authed);
+  $("nav").classList.toggle("hide", !authed);
+  $("logout").classList.toggle("hide", !authed);
+  $("who").textContent = authed ? (me.username || "admin token") + " · " + me.role : "";
+  $("firstrun").classList.toggle("hide", authed || !me || me.has_users);
+  if (!authed) { document.querySelectorAll(".tab").forEach(t => t.classList.add("hide")); return; }
+  document.querySelectorAll("[data-perm]").forEach(e => e.classList.toggle("hide", !can(e.dataset.perm)));
+  const allowed = { overview: "overview.view", log: "overview.view", clients: "clients.view", servers: "backends.view", try: "tests.run", settings: "backends.view", admins: "admins.manage", audit: "audit.view" };
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("hide", !can(allowed[b.dataset.tab])));
+  const first = [...document.querySelectorAll("nav button")].find(b => !b.classList.contains("hide"));
+  if (first) open(first.dataset.tab);
+}
+
+function open(tab) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("hide", t.id !== "tab-" + tab));
+  lastAuto[tab] = Date.now();
+  ({ overview: loadOverview, log: loadLog, clients: loadClients, servers: loadServers, settings: loadSettings, admins: loadAdmins, audit: loadAudit }[tab] || (() => {}))();
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => open(b.dataset.tab));
+
+const healthPill = s => h("span", { class: "pill " + ({ online: "ok", offline: "bad" }[s] || "mute") }, s);
+
+async function loadOverview() {
+  const o = await api("/overview");
+  const pct = o.calls_24h ? Math.round(100 * o.ok_24h / o.calls_24h) + "%" : "–";
+  $("ovStats").replaceChildren(
+    h("div", { class: "stat" }, h("b", {}, o.calls_24h), "calls (24 h)"),
+    h("div", { class: "stat" }, h("b", {}, pct), "answered"),
+    h("div", { class: "stat" }, h("b", {}, ms(o.p50_ms)), "median time"),
+    h("div", { class: "stat" }, h("b", {}, ms(o.p90_ms)), "9 in 10 within"),
+    h("div", { class: "stat" }, h("b", {}, o.failed_24h), "every server failed"),
+    h("div", { class: "stat" }, h("b", {}, o.refused_24h), "refused (key or limit)"));
+  const max = Math.max(1, ...o.by_hour.map(d => d.calls));
+  $("ovSpark").replaceChildren(...o.by_hour.map(d => h("div", { class: d.ok < d.calls ? "f" : "", style: `height:${Math.max(3, 100 * d.calls / max)}%`, title: `${new Date(d.hour).toLocaleString()}: ${d.calls} calls, ${d.ok} answered` })));
+  $("ovSparkNote").textContent = o.by_hour.length ? "Red: an hour with at least one call that wasn't answered. Hover a bar for its numbers." : "No calls yet.";
+  $("ovServers").replaceChildren(...o.servers.map((s, i) => h("tr", {}, h("td", {}, i + 1), h("td", {}, s.name, s.enabled ? "" : h("span", { class: "mute" }, " (off)")), h("td", {}, healthPill(s.health)), h("td", {}, s.resting_seconds ? s.resting_seconds + " s" : "–"), h("td", { class: "wrap mute" }, s.last_error || s.health_detail || ""))));
+  const rows = list => list.length ? list.map(d => h("tr", {}, h("td", {}, d.name), h("td", {}, d.calls), h("td", {}, d.ok), h("td", {}, ms(d.p50_ms)))) : [h("tr", {}, h("td", { colspan: 4, class: "mute" }, "None yet."))];
+  $("ovClients").replaceChildren(...rows(o.by_client));
+  $("ovByServer").replaceChildren(...rows(o.by_server));
+}
+
+async function loadLog() {
+  const rows = await api("/logs?limit=200" + ($("logFailed").checked ? "&failed=true" : ""));
+  $("logRows").replaceChildren(...(rows.length ? rows.map(r => h("tr", {},
+    h("td", {}, when(r.at)), h("td", {}, r.app || ""), h("td", {}, r.endpoint),
+    h("td", {}, h("span", { class: "pill " + (r.ok ? "ok" : r.status === 400 || r.status === 404 ? "warn" : "bad") }, r.status)),
+    h("td", {}, r.server || "–", r.attempts > 1 ? h("span", { class: "mute" }, ` (${r.attempts} tried)`) : ""),
+    h("td", {}, ms(r.latency_ms)), h("td", { class: "wrap mute" }, r.error || ""))) : [h("tr", {}, h("td", { colspan: 7, class: "mute" }, "No calls yet."))]));
+}
+$("logRefresh").onclick = loadLog; $("logFailed").onchange = loadLog;
+
+function showKey(c) {
+  $("cNew").replaceChildren(h("b", {}, `Key for ${c.name}: `), h("span", { class: "key" }, c.api_key),
+    h("p", { class: "mute" }, "Copy it now: it is shown only once. Paste it where the app's Google Maps server key goes (GET.ride: Admin › Fare AI provider › Google Maps servers, address " + (location.origin) + ")."));
+  $("cNew").classList.remove("hide");
+}
+async function loadClients() {
+  const list = await api("/clients");
+  const manage = can("clients.manage");
+  $("cRows").replaceChildren(...(list.length ? list.map(c => h("tr", {},
+    h("td", {}, c.name, c.active ? "" : h("span", { class: "pill bad", style: "margin-left:6px" }, "revoked")),
+    h("td", { class: "key" }, c.key_prefix + "…"),
+    h("td", {}, c.rate_per_minute + "/min"), h("td", {}, c.calls_last_minute), h("td", {}, when(c.last_used_at) || "never"),
+    h("td", { class: "acts" }, manage ? [
+      h("button", { class: "btn", onclick: async () => { const v = prompt("Calls a minute (most) for " + c.name, c.rate_per_minute); if (v) { await api(`/clients/${c.id}`, { method: "PUT", body: JSON.stringify({ rate_per_minute: +v }) }); loadClients(); } } }, "Limit"),
+      h("button", { class: "btn", onclick: async () => { if (confirmIn(`New key for ${c.name}? The old key stops working at once.`)) { showKey(await api(`/clients/${c.id}/rotate`, { method: "POST" })); loadClients(); } } }, "New key"),
+      h("button", { class: "btn danger", onclick: async () => { await api(`/clients/${c.id}`, { method: "PUT", body: JSON.stringify({ active: !c.active }) }); loadClients(); } }, c.active ? "Revoke" : "Turn on"),
+      c.active ? null : h("button", { class: "btn danger", onclick: async () => { if (confirmIn(`Delete ${c.name} for good?`)) { await api(`/clients/${c.id}`, { method: "DELETE" }); loadClients(); } } }, "Delete"),
+    ] : ""))) : [h("tr", {}, h("td", { colspan: 6, class: "mute" }, "No apps yet: create one above."))]));
+}
+$("cCreate").onclick = async () => {
+  const name = $("cName").value.trim(); if (!name) return;
+  const body = { name }; if ($("cRate").value) body.rate_per_minute = +$("cRate").value;
+  try { showKey(await api("/clients", { method: "POST", body: JSON.stringify(body) })); $("cName").value = ""; $("cRate").value = ""; loadClients(); }
+  catch (e) { $("cNew").textContent = e.message; $("cNew").classList.remove("hide"); }
+};
+
+// The page can't show confirm() dialogs in every host, so a second click confirms.
+const pending = {};
+function confirmIn(msg) { if (pending[msg] && Date.now() - pending[msg] < 6000) { delete pending[msg]; return true; } pending[msg] = Date.now(); flash(msg + " Click again to confirm."); return false; }
+function flash(msg) { $("toast").textContent = msg; $("toast").classList.remove("hide"); clearTimeout(flash.t); flash.t = setTimeout(() => $("toast").classList.add("hide"), 6000); }
+
+let editing = null;
+async function loadServers() {
+  const list = await api("/backends");
+  const manage = can("backends.manage"), test = can("tests.run");
+  $("sRows").replaceChildren(...(list.length ? list.map((s, i) => h("tr", {},
+    h("td", {}, i + 1), h("td", {}, s.name, s.enabled ? "" : h("span", { class: "mute" }, " (off)"), s.has_key ? "" : h("div", { class: "warn mute" }, "no key")),
+    h("td", { class: "key wrap" }, s.url), h("td", {}, ms(s.timeout_ms)), h("td", {}, s.rest_seconds + " s"),
+    h("td", {}, healthPill(s.health), s.resting_seconds ? h("div", { class: "mute" }, `resting ${s.resting_seconds} s`) : "", h("div", { class: "mute wrap" }, s.health_detail || s.last_error || "")),
+    h("td", { class: "acts" },
+      test ? h("button", { class: "btn", onclick: async ev => { busy++; ev.target.disabled = true; $("sTest").textContent = `Testing ${s.name} (a server whose Chrome is closed takes 10–20 s)…`; $("sTest").classList.remove("hide"); try { const t = await api(`/backends/${s.id}/test`, { method: "POST" }); $("sTest").textContent = `${s.name}: health ${t.health}${t.health_detail ? " (" + t.health_detail + ")" : ""}; route ${t.route.status ?? "no answer"} in ${ms(t.route.latency_ms)}: ${t.route.summary}`; } catch (e) { $("sTest").textContent = e.message; } busy--; ev.target.disabled = false; loadServers(); } }, "Test") : "",
+      manage ? [
+        h("button", { class: "btn", disabled: i === 0 ? "" : null, onclick: async () => { await api(`/backends/${s.id}/move?up=true`, { method: "POST" }); loadServers(); } }, "Ask earlier"),
+        s.resting_seconds ? h("button", { class: "btn", onclick: async () => { await api(`/backends/${s.id}/wake`, { method: "POST" }); loadServers(); } }, "End rest") : null,
+        h("button", { class: "btn", onclick: async () => { await api(`/backends/${s.id}`, { method: "PUT", body: JSON.stringify({ enabled: !s.enabled }) }); loadServers(); } }, s.enabled ? "Turn off" : "Turn on"),
+        h("button", { class: "btn", onclick: () => edit(s) }, "Edit"),
+        h("button", { class: "btn danger", onclick: async () => { if (confirmIn(`Remove ${s.name}?`)) { await api(`/backends/${s.id}`, { method: "DELETE" }); loadServers(); } } }, "Remove"),
+      ] : ""))) : [h("tr", {}, h("td", { colspan: 7, class: "mute" }, "No servers yet: add the Mac mini first, then the NAS pool."))]));
+}
+function edit(s) {
+  editing = s.id; $("sFormTitle").textContent = "Change " + s.name;
+  $("sName").value = s.name; $("sUrl").value = s.url; $("sKey").value = ""; $("sKey").placeholder = s.has_key ? "keep the key it has" : "paste the key";
+  $("sTimeout").value = s.timeout_ms; $("sRest").value = s.rest_seconds; $("sSave").textContent = "Save"; $("sCancel").classList.remove("hide");
+}
+function resetForm() { editing = null; $("sFormTitle").textContent = "Add a server"; for (const id of ["sName", "sUrl", "sKey"]) $(id).value = ""; $("sKey").placeholder = "paste the key"; $("sTimeout").value = 4000; $("sRest").value = 60; $("sSave").textContent = "Add"; $("sCancel").classList.add("hide"); }
+$("sCancel").onclick = resetForm;
+$("sSave").onclick = async () => {
+  const body = { name: $("sName").value.trim(), url: $("sUrl").value.trim(), timeout_ms: +$("sTimeout").value, rest_seconds: +$("sRest").value };
+  if ($("sKey").value.trim()) body.key = $("sKey").value.trim();
+  try { await api(editing ? `/backends/${editing}` : "/backends", { method: editing ? "PUT" : "POST", body: JSON.stringify(body) }); resetForm(); loadServers(); }
+  catch (e) { $("sTest").textContent = e.message; $("sTest").classList.remove("hide"); }
+};
+
+$("tGo").onclick = async () => {
+  $("tGo").disabled = true; $("tOut").textContent = "Asking…"; $("tOut").classList.remove("hide");
+  try { const r = await api("/try", { method: "POST", body: JSON.stringify({ from: $("tFrom").value, to: $("tTo").value }) });
+    $("tOut").replaceChildren(h("b", { class: r.status === 200 ? "ok" : "bad" }, r.status === 200 ? "Answered" : "No route"), ` by ${r.server || "no server"} in ${ms(r.latency_ms)}` + (r.attempts > 1 ? ` (${r.attempts} servers tried)` : "") + ": ", r.summary, r.error && r.status !== 200 ? h("div", { class: "mute" }, r.error) : "");
+  } catch (e) { $("tOut").textContent = e.message; }
+  $("tGo").disabled = false;
+};
+
+async function loadSettings() {
+  const s = await api("/settings");
+  $("stTotal").value = s.total_timeout_ms; $("stRate").value = s.default_rate_per_minute; $("stDays").value = s.log_retention_days;
+  const ro = !can("settings.manage"); for (const id of ["stTotal", "stRate", "stDays"]) $(id).disabled = ro;
+}
+$("stSave").onclick = async () => {
+  try { await api("/settings", { method: "PUT", body: JSON.stringify({ total_timeout_ms: +$("stTotal").value, default_rate_per_minute: +$("stRate").value, log_retention_days: +$("stDays").value }) }); $("stMsg").textContent = "Saved."; loadSettings(); }
+  catch (e) { $("stMsg").textContent = e.message; }
+};
+
+async function loadAdmins() {
+  const [roles, list] = await Promise.all([api("/roles"), api("/admins")]);
+  $("aRole").replaceChildren(...roles.map(r => h("option", { value: r.id }, r.label)));
+  $("aRows").replaceChildren(...(list.length ? list.map(a => h("tr", {}, h("td", {}, a.username), h("td", {}, a.role), h("td", {}, when(a.last_login_at) || "never"),
+    h("td", { class: "acts" }, h("button", { class: "btn danger", onclick: async () => { if (confirmIn(`Remove ${a.username}?`)) { try { await api(`/admins/${encodeURIComponent(a.username)}`, { method: "DELETE" }); } catch (e) { $("aMsg").textContent = e.message; } loadAdmins(); } } }, "Remove")))) : [h("tr", {}, h("td", { colspan: 4, class: "mute" }, "No users yet."))]));
+}
+$("aSave").onclick = async () => {
+  const body = { username: $("aUser").value.trim(), role: $("aRole").value }; if ($("aPass").value) body.password = $("aPass").value;
+  try { const r = await api("/admins", { method: "POST", body: JSON.stringify(body) }); $("aMsg").textContent = r.changed ? `${r.username} updated (role ${r.role}).` : `${r.username} can now sign in as ${r.role}.`; $("aPass").value = ""; loadAdmins(); }
+  catch (e) { $("aMsg").textContent = e.message; }
+};
+
+async function loadAudit() {
+  const rows = await api("/audit?limit=200");
+  $("auRows").replaceChildren(...(rows.length ? rows.map(a => h("tr", {}, h("td", {}, when(a.at)), h("td", {}, a.actor), h("td", {}, a.action), h("td", {}, a.target || ""), h("td", { class: "wrap mute" }, a.detail || ""))) : [h("tr", {}, h("td", { colspan: 5, class: "mute" }, "Nothing yet."))]));
+}
+$("auVerify").onclick = async () => { const r = await api("/audit/verify"); $("auMsg").textContent = r.ok ? `All ${r.rows_checked} entries check out.` : `Changed: entry ${r.broken_at_id} doesn't fit the ones before it.`; };
+
+$("pwForm").onsubmit = async e => {
+  e.preventDefault();
+  const r = await fetch("/admin/session/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: $("user").value, password: $("pass").value, remember: $("remember").checked }) });
+  if (!r.ok) { $("loginErr").textContent = r.status === 429 ? "Too many attempts: wait 15 minutes." : "Wrong username or password."; return; }
+  $("pass").value = ""; $("loginErr").textContent = ""; refreshMe();
+};
+$("useToken").onclick = () => { $("tokenForm").classList.remove("hide"); $("pwForm").classList.add("hide"); $("token").focus(); };
+$("tokenBtn").onclick = async () => { token = $("token").value.trim(); sessionStorage.setItem("wzToken", token); $("token").value = ""; await refreshMe(); if (!me.signed_in) { $("loginErr").textContent = "That token is not right."; $("pwForm").classList.remove("hide"); $("tokenForm").classList.add("hide"); } };
+$("token").addEventListener("keydown", e => e.key === "Enter" && $("tokenBtn").click());
+$("logout").onclick = async () => { token = ""; sessionStorage.removeItem("wzToken"); await fetch("/admin/session/logout", { method: "POST" }); refreshMe(); };
+// The open tab keeps itself up to date: Servers and Request log every 15 s,
+// Overview every 30 s. It waits while a Test runs, while you type in a box, and
+// while the browser tab is in the background (and catches up when it is back).
+let busy = 0;
+const AUTO = { servers: [() => loadServers(), 15000], log: [() => loadLog(), 15000], overview: [() => loadOverview(), 30000] };
+let lastAuto = {};
+function autoUpdate() {
+  if (!me || !me.signed_in || document.hidden || busy) return;
+  const a = document.activeElement;
+  if (a && (a.tagName === "TEXTAREA" || a.tagName === "SELECT" || (a.tagName === "INPUT" && a.type !== "checkbox"))) return;
+  for (const [tab, [load, every]] of Object.entries(AUTO)) {
+    if ($("tab-" + tab).classList.contains("hide") || Date.now() - (lastAuto[tab] || 0) < every) continue;
+    lastAuto[tab] = Date.now();
+    load().catch(() => {});
+  }
+}
+setInterval(autoUpdate, 5000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { lastAuto = {}; autoUpdate(); } });
+refreshMe();
+</script>
+</body>
+</html>

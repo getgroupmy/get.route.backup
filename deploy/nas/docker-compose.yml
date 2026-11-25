@@ -38,11 +38,17 @@ services:
       WARM_WINDOWS: ${WARM_WINDOWS:-2}
       BROWSER_IDLE: ${BROWSER_IDLE:-300}
       WARM_ON_START: ${WARM_ON_START:-1}
-      WAIT_FOR_CHROME: ${WAIT_FOR_CHROME:-10}
+      # A lookup that finds every window busy waits this long, then answers
+      # 503, so the Google Maps console still has time to ask the Mac.
+      WAIT_FOR_CHROME: ${WAIT_FOR_CHROME:-1}
       # The road shape drops points within this many metres of a straight line.
       POLYLINE_TOLERANCE: ${POLYLINE_TOLERANCE:-5}
     expose:
       - "8000"
+    # On the office network too, for the Google Maps console on the Mac mini
+    # (its second server, http://192.168.0.13:8001). Every call needs the key.
+    ports:
+      - "${LAN_PORT:-8001}:8000"
     volumes:
       # Pages Chrome saw when a query failed (see README.md).
       - ./debug:/app/debug
