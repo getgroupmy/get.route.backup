@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Starts the Google Maps console at login and again if it stops. Copy to
+     ~/Library/LaunchAgents/ with /Users/YOU/traffic-scraper replaced by where the
+     repository is (README.md does both). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.getride.gmap-console</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOU/traffic-scraper/console/deploy/mac/start.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/YOU/traffic-scraper/console/deploy/mac/logs/console.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/traffic-scraper/console/deploy/mac/logs/console.log</string>
+</dict>
+</plist>

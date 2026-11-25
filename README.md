@@ -67,7 +67,7 @@ Differences from GET.route:
   it always uses the traffic right now.
 - **A pool of Chrome windows.** Each window answers one lookup at a time;
   several windows answer at once (see "How many windows" below). A lookup
-  that finds every window busy waits up to 10 s (`WAIT_FOR_CHROME`), then
+  that finds every window busy waits up to 1 s (`WAIT_FOR_CHROME`), then
   gets a 503.
 - A repeat of the same trip within 60 s (`CACHE_SECONDS`) is answered from
   memory.
@@ -76,12 +76,23 @@ Errors, as on GET.route: a bad parameter is a 400 naming the field, "no
 route between these places" is a 400, a wrong key is a 401, and a page
 that fails to load is a 500.
 
-## Mac mini as primary, NAS as backup
+## The Google Maps console: apps, keys, Mac and NAS
 
-A Mac mini can answer the lookups first, with the NAS as the backup: GET.ride
-asks the Google Maps servers in the order listed in Admin › Fare AI provider,
-and moves to the next one when a server fails. The Mac runs the scraper
-natively (not in Docker) behind a tunnel of its own. Setup: [deploy/mac/README.md](deploy/mac/README.md).
+Apps don't call a scraper directly. They call the **Google Maps console**
+([console/README.md](console/README.md)), the same console as GET.route's Waze console: a
+key per app with its own limit, the scrapers in order with failover, health
+every minute, a request log, and an admin page at `/admin` with sign-in,
+roles (owner, admin, developer, viewer) and an audit trail. It runs on both
+machines:
+
+```
+                ┌─► gmap.getcdn.link  ─► console on the Mac ─┬─► Mac scraper  first
+ GET.ride ──────┤                                            └─► NAS scraper  second
+ other apps     └─► gmap2.getcdn.link ─► console on the NAS ─┬─► NAS scraper  first
+ (a key each)                                                └─► Mac scraper  second
+```
+
+The scraper on the Mac mini (natively, not in Docker): [deploy/mac/README.md](deploy/mac/README.md).
 
 ## How the container works
 
