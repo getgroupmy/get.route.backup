@@ -125,5 +125,40 @@ class DirectionsRpcTest(unittest.TestCase):
         self.assertIsNone(TS.directions_rpc(object()))
 
 
+class FetchFallbackTest(unittest.TestCase):
+    PAGE = ('<link rel="preload" href="/maps/preview/directions?authuser=0&amp;hl=en&amp;pb=%211m4">'
+            '<script>x="/maps/preview/directions?authuser\\u003d0\\u0026hl\\u003den"</script>')
+
+    def test_the_address_the_page_names(self):
+        self.assertEqual(TS.rpc_address(self.PAGE), "/maps/preview/directions?authuser=0&hl=en&pb=%211m4")
+        self.assertEqual(TS.rpc_address('<s>"/maps/preview/directions?a\\u003d1\\u0026b\\u003d2"</s>'),
+                         "/maps/preview/directions?a=1&b=2")
+        self.assertIsNone(TS.rpc_address("<html>no directions</html>"))
+
+    def test_the_page_fetches_it_when_the_log_has_nothing(self):
+        class Driver(FakeLoggingDriver):
+            def __init__(self):
+                super().__init__([], {})
+                self.fetched = []
+
+            def set_script_timeout(self, s):
+                pass
+
+            def execute_async_script(self, script, url):
+                self.fetched.append(url)
+                return BODY
+        d = Driver()
+        self.assertEqual(TS.directions_rpc(d, self.PAGE), BODY)
+        self.assertEqual(d.fetched, ["/maps/preview/directions?authuser=0&hl=en&pb=%211m4"])
+
+    def test_the_log_comes_first_and_no_address_means_no_fetch(self):
+        class Driver(FakeLoggingDriver):
+            def execute_async_script(self, *a):
+                raise AssertionError("no fetch when the log has it")
+        d = Driver([response("3", "https://www.google.com/maps/preview/directions?pb=x")], {"3": {"body": "from log"}})
+        self.assertEqual(TS.directions_rpc(d, self.PAGE), "from log")
+        self.assertIsNone(TS.directions_rpc(FakeLoggingDriver([], {}), "<html></html>"))
+
+
 if __name__ == "__main__":
     unittest.main()

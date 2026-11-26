@@ -143,9 +143,14 @@ def _performance_log(driver):
         return []
 
 
-def directions_rpc(driver):
-    """The body of the page's latest directions download (DIRECTIONS_RPC),
-    or None. Call it right after load_directions(), in the same window."""
+# The page names its directions request in its own HTML (a preload link, and
+# again in its start-up data with \u003d / \u0026 for = and &).
+RPC_IN_PAGE = re.compile(r'(/maps/preview/directions\?[^"\'\s<>]+)')
+FETCH_TIMEOUT_S = 3
+
+
+def _rpc_from_log(driver):
+    """The latest directions download in Chrome's network log, or None."""
     request_id = None
     for entry in _performance_log(driver):
         try:
@@ -165,6 +170,43 @@ def directions_rpc(driver):
     if body and answer.get("base64Encoded"):
         body = base64.b64decode(body).decode("utf-8", "replace")
     return body or None
+
+
+def rpc_address(page_source):
+    """The directions request the page names in its HTML, or None."""
+    m = RPC_IN_PAGE.search(page_source or "")
+    if not m:
+        return None
+    url = m.group(1).replace("\\u003d", "=").replace("\\u0026", "&")
+    return html.unescape(url)
+
+
+def _rpc_by_fetch(driver, page_source):
+    """Ask for the page's directions request again, from inside the page (same
+    tab, same cookies), when the network log didn't have it. None if the page
+    names none or it doesn't answer within FETCH_TIMEOUT_S."""
+    url = rpc_address(page_source)
+    if not url:
+        return None
+    try:
+        driver.set_script_timeout(FETCH_TIMEOUT_S)
+        body = driver.execute_async_script(
+            "const done = arguments[arguments.length - 1];"
+            "fetch(arguments[0], {credentials: 'include'})"
+            ".then(r => r.ok ? r.text() : null).then(done, () => done(null));", url)
+    except Exception:
+        return None
+    return body if isinstance(body, str) and body else None
+
+
+def directions_rpc(driver, page_source=None):
+    """The body of the page's latest directions download (DIRECTIONS_RPC),
+    or None. Call it right after load_directions(), in the same window.
+
+    First from Chrome's network log; when that has nothing (seen on the Mac
+    mini: the log held no directions answer), the page fetches the request it
+    names in its own HTML."""
+    return _rpc_from_log(driver) or _rpc_by_fetch(driver, page_source)
 
 
 def route_lines(rpc_body):

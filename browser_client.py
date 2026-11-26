@@ -130,7 +130,7 @@ class ChromePool:
                 raise ConnectionError(f"Chrome did not start: {e}")
         try:
             page = load_directions(w.driver, url, label=label)
-            return (page, directions_rpc(w.driver)) if with_rpc else page
+            return (page, directions_rpc(w.driver, page)) if with_rpc else page
         except ConnectionError:
             self._discard(w)  # broken window: a fresh one opens when needed
             raise
