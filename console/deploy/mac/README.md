@@ -4,15 +4,15 @@ Two consoles, so Google Maps keeps working when either machine is down:
 
 ```
                     ┌─► gmap.getcdn.link  ─ Mac's tunnel ─► console on the Mac ─┬─► Mac scraper  http://127.0.0.1:8000      first
- GET.ride ──────────┤   (Google Maps server 1)                                  └─► NAS scraper  http://192.168.0.13:8301   second
+ GET.ride ──────────┤   (Google Maps server 1)                                  └─► NAS scraper  http://100.74.192.71:8301 second (Tailscale)
  (Google Maps       │
   servers)          └─► gmap2.getcdn.link ─ NAS's tunnel ─► console on the NAS ─┬─► NAS scraper  http://traffic-scraper:8000 first
                         (Google Maps server 2)                                  └─► Mac scraper  http://192.168.0.101:8000  second
 ```
 
 - **Every day:** GET.ride asks `gmap.getcdn.link`, the console on the Mac,
-  which asks the Mac's own scraper first and the NAS's scraper over the
-  office network if the Mac's fails or is busy.
+  which asks the Mac's own scraper first and the NAS's scraper over
+  Tailscale if the Mac's fails or is busy.
 - **Mac down** (off, asleep, its tunnel down): `gmap.getcdn.link` doesn't
   answer, so GET.ride asks its second Google Maps server,
   `gmap2.getcdn.link`, the console on the NAS.
@@ -28,6 +28,19 @@ repository), started by launchd at login. It listens on this Mac only
 (`127.0.0.1:8300`); the Mac's Cloudflare Tunnel brings `gmap.getcdn.link` to
 it. That is the tunnel the Mac already runs for GET.route's console
 (`GET.route Mac`), so no new tunnel is needed.
+
+**Keep it a login service** (`~/Library/LaunchAgents`, as below), not a
+system service in `/Library/LaunchDaemons`. macOS only lets Python reach
+other machines with the user's **Local Network** permission (System Settings
+› Privacy & Security › Local Network › Python), and a system service doesn't
+get it.
+
+**The NAS through Tailscale, not the office network.** Even with that
+permission, Python under launchd gets "No route to host" for the NAS's office
+address (`192.168.0.13`), while the same request from Terminal works. The
+NAS's Tailscale address (`100.74.192.71`) isn't "local network" to macOS, so
+the console asks the NAS scraper there, as GET.route's console asks the NAS
+pool (`100.74.192.71:8100`).
 
 ## 1. Install it (on the Mac)
 
@@ -107,10 +120,16 @@ grep ^GM_ADMIN_TOKEN ~/traffic-scraper/console/deploy/mac/.env | cut -d= -f2 | t
      ```bash
      grep ^ROUTE_API_KEY ~/traffic-scraper/deploy/mac/.env | cut -d= -f2 | tr -d '\n' | pbcopy && echo "key copied"
      ```
-   - **NAS scraper**: `http://192.168.0.13:8301`, the NAS scraper's key (on
-     the NAS: `sudo docker exec traffic-scraper printenv ROUTE_API_KEY`). The
-     NAS's scraper answers on port 8301 once it is updated (step 4 of
-     [the NAS console's set-up](../../README.md)).
+   - **NAS scraper**: `http://100.74.192.71:8301` (the NAS's Tailscale
+     address), the NAS scraper's key (on the NAS:
+     `sudo docker exec traffic-scraper printenv ROUTE_API_KEY`). The NAS's
+     scraper answers on port 8301 once it is updated (step 4 of
+     [the NAS console's set-up](../../README.md)). Check from the Mac with
+     the console's own Python:
+
+     ```bash
+     ~/traffic-scraper/console/.venv/bin/python -c "import httpx; print(httpx.get('http://100.74.192.71:8301/health', timeout=5).text)"
+     ```
 
    **Test** each.
 3. **Apps:** `GET.ride fares`, **Create key**, and copy it for step 6.
@@ -123,12 +142,10 @@ Admin › Settings › Fare AI provider › Google Maps servers:
 2. **Add**: `https://gmap2.getcdn.link` with the NAS console's GET.ride key
    (its set-up is [`../../README.md`](../../README.md)). **Test**.
 3. Order: `gmap.getcdn.link` first (**Ask earlier**), `gmap2` second.
-4. Remove the old server `https://traffic.getride.my` (the NAS scraper
-   straight, before the consoles). Both consoles reach that scraper now.
-5. **Save changes**.
+4. **Save changes**.
 
-Then, in Cloudflare, the NAS tunnel's public hostname `traffic.getride.my`
-can go too, once GET.ride no longer lists it.
+GET.ride never calls a scraper directly, and the scrapers have no public
+hostname: only the two consoles do.
 
 ## Check it
 

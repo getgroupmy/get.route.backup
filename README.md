@@ -1,27 +1,37 @@
 # Traffic Scraper on the office NAS
 
-The Traffic Scraper answers your app with Google Maps' live drive time and
-distance. It runs on the NAS the same way GET.route does: a container with
-Chrome and a small API, reached through **GET.route's Cloudflare Tunnel**.
+The Traffic Scraper answers with Google Maps' live drive time, distance and
+road shape. It runs on the NAS the same way GET.route does: a container with
+Chrome and a small API, in GET.route's Docker network.
+
+**It has no public address.** Apps call the **Google Maps console**
+([console/README.md](console/README.md)) at `gmap.getcdn.link` (on the Mac mini) or
+`gmap2.getcdn.link` (on the NAS), each with its own app key; the consoles
+ask the scrapers:
 
 ```
-                     route.getride.my   ─┐                ┌─► get-route-pool   (GET.route)
- your app ──https──►                     ├─ Tunnel ─► get-route-tunnel
-           X-Route-Key traffic.getride.my ─┘  (cloudflared)  └─► traffic-scraper  (Chrome + API)
+                ┌─► gmap.getcdn.link  ─► console on the Mac ─┬─► Mac scraper  127.0.0.1:8000
+ GET.ride ──────┤                                            └─► NAS scraper  100.74.192.71:8301 (Tailscale)
+ other apps     └─► gmap2.getcdn.link ─► console on the NAS ─┬─► Mac scraper  192.168.0.101:8000
+ (a key each)                                                └─► NAS scraper  traffic-scraper:8000
 ```
 
-`traffic.getride.my` is an example hostname; use any name in your
-Cloudflare zone.
+The NAS scraper answers inside GET.route's Docker network
+(`traffic-scraper:8000`, for the NAS console) and on port 8301 of the NAS
+(`LAN_PORT`, for the Mac's console), always with its key.
 
 ## Asking it for a route
 
-It speaks GET.route's API, so a caller that already uses GET.route sends the
-same request:
+It speaks GET.route's API, and so do the consoles in front of it. On the
+NAS, with the scraper's own key:
 
 ```bash
 curl -s -H "X-Route-Key: $ROUTE_API_KEY" \
-  "https://traffic.getride.my/routes/search?from=3.1579,101.7116&to=3.1340,101.6862"
+  "http://127.0.0.1:8301/routes/search?from=3.1579,101.7116&to=3.1340,101.6862"
 ```
+
+An app sends the same request to `https://gmap.getcdn.link` with its console
+key.
 
 - `from` / `to`: `lat,lng`, or an address or place name.
 - Or `url=`: a Google Maps directions link (as in `web_scraping.py`).
@@ -107,13 +117,14 @@ The scraper on the Mac mini (natively, not in Docker): [deploy/mac/README.md](de
 - **Failures heal themselves.** If Chrome crashes or a page fails to load,
   the window is closed and the next query opens a fresh one. Docker restarts
   the container if the API itself stops.
-- **Health:** `https://traffic.getride.my/health` is always open. With the
-  key it also shows the last success, the last error and whether Chrome is
-  open:
+- **Health:** `/health` is always open. With the key it also shows the last
+  success, the last error and the Chrome windows. On the NAS:
 
   ```bash
-  curl -s -H "X-Route-Key: $ROUTE_API_KEY" https://traffic.getride.my/health
+  curl -s -H "X-Route-Key: $ROUTE_API_KEY" http://127.0.0.1:8301/health
   ```
+
+  The consoles check it every minute and show it under **Servers**.
 
 ## When a query fails
 
@@ -168,8 +179,9 @@ without areas do not share the load.
 
 ## Security
 
-- **No port is opened** on the NAS or the router: `cloudflared` makes an
-  outgoing connection and Cloudflare sends the hostname down it.
+- **Nothing is public.** The scraper has no public hostname; only the
+  consoles do, behind Cloudflare. Its port 8301 is open on the office
+  network and Tailscale, not on the router.
 - Every call except `/health` needs the secret header `X-Route-Key`.
 - `url=` only accepts `https://www.google.com/maps/dir/...` links, so the
   API can't be used to open other pages from inside your network.
@@ -222,20 +234,17 @@ token. The container joins GET.route's Docker network, so GET.route's
    name `traffic-scraper`.) The first build downloads only the parts GET.route
    doesn't already have.
 
-5. In Cloudflare Zero Trust › Networks › Tunnels, open **GET.route's
-   tunnel** › Public Hostname › **Add a public hostname**:
-   `traffic.getride.my` → type **HTTP**, URL `traffic-scraper:8000`.
-   GET.route's own hostname stays as it is.
-
-6. Check it from anywhere: `https://traffic.getride.my/health` answers
+5. Check it on the NAS: `curl -s http://127.0.0.1:8301/health` answers
    `{"status": "ok", ...}`. Then a real query:
 
    ```bash
-   curl -s -H "X-Route-Key: $ROUTE_API_KEY" "https://traffic.getride.my/routes/search?from=3.1579,101.7116&to=3.1340,101.6862"
+   curl -s -H "X-Route-Key: $(sudo grep ^ROUTE_API_KEY= .env | cut -d= -f2)" "http://127.0.0.1:8301/routes/search?from=3.1579,101.7116&to=3.1340,101.6862"
    ```
 
-7. In your app, send `GET /routes/search?from=…&to=…` to that hostname with
-   the key in `X-Route-Key`.
+6. Add it to both consoles' **Servers** ([console/README.md](console/README.md)): the
+   NAS console as `http://traffic-scraper:8000`, the Mac console as
+   `http://100.74.192.71:8301` (the NAS's Tailscale address), each with this
+   `ROUTE_API_KEY`. There is no public hostname to add in Cloudflare.
 
 **Separate from GET.route.** The project is always called `traffic-scraper`
 (set in `docker-compose.yml`), so `docker compose` commands in this folder
@@ -249,8 +258,10 @@ Create the network yourself and start the tunnel container too:
 
 1. `sudo docker network create traffic-scraper-net` and set
    `GET_ROUTE_NETWORK=traffic-scraper-net` in `.env`.
-2. Create a tunnel in Cloudflare (Docker), put its token in `TUNNEL_TOKEN`
-   in `.env`, and add the hostname → `http://traffic-scraper:8000`.
+2. Create a tunnel in Cloudflare (Docker) and put its token in
+   `TUNNEL_TOKEN` in `.env`. It carries the NAS console's hostname
+   (`gmap2.getcdn.link` → `http://gmap-console:8080`); the scraper itself
+   gets none.
 3. Start with the tunnel:
 
    ```bash
