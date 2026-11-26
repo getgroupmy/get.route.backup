@@ -11,7 +11,7 @@ the scrapers in order:
 
 ```
                 ┌─► gmap.getcdn.link  ─► console on the Mac ─┬─► Mac scraper  http://127.0.0.1:8000     first
- GET.ride ──────┤                                            └─► NAS scraper  http://192.168.0.13:8301  second
+ GET.ride ──────┤                                            └─► NAS scraper  http://100.74.192.71:8301 second (Tailscale)
  other apps     └─► gmap2.getcdn.link ─► console on the NAS ─┬─► NAS scraper  http://traffic-scraper:8000 first
  (a key each)                                                └─► Mac scraper  http://192.168.0.101:8000 second
 ```

@@ -1,8 +1,8 @@
 # The Google Maps traffic API on the office NAS (see README.md), set up the
-# same way as GET.route: one container with Chrome, reached only through a
-# Cloudflare Tunnel, so no port is opened on the NAS or the router.
-#
-#   traffic.getride.my -> http://traffic-scraper:8000   needs X-Route-Key
+# same way as GET.route: one container with Chrome. It has no public
+# hostname: the Google Maps consoles ask it (console/README.md), the NAS's at
+# http://traffic-scraper:8000 and the Mac's at the NAS's port 8301 (Tailscale
+# 100.74.192.71). Every call needs X-Route-Key.
 #
 # Chrome opens when the container starts and stays open (WARM_ON_START,
 # BROWSER_IDLE below): GET.ride allows the Google Maps step only 3 s.
@@ -45,8 +45,9 @@ services:
       POLYLINE_TOLERANCE: ${POLYLINE_TOLERANCE:-5}
     expose:
       - "8000"
-    # On the office network too, for the Google Maps console on the Mac mini
-    # (its second server, http://192.168.0.13:8301). Every call needs the key.
+    # On the office network and Tailscale too, for the Google Maps console on
+    # the Mac mini (its second server, http://100.74.192.71:8301: macOS blocks
+    # its Python from the office network). Every call needs the key.
     ports:
       - "${LAN_PORT:-8301}:8000"
     volumes:
